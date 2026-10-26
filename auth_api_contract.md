@@ -23,7 +23,7 @@
 
 ## Public
 
-- auth/register
+- ✅ auth/register
     - Method: POST
     - Request Body:
         - email (string)
@@ -105,7 +105,7 @@
         - consume token, save new hash, revoke ALL refresh tokens of the user
         - set email_verified_at if null (clicking the link proves the email)
 
-- auth/email-verification
+- auth/email-verification ✅
     - resend verification mail
     - Method: POST
     - Request Body:
@@ -115,7 +115,7 @@
         - 202: always
         - 429: per IP only
 
-- auth/email-verification/confirm
+- auth/email-verification/confirm ✅
     - Method: POST
     - Request Body:
         - token (string)

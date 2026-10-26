@@ -2,37 +2,28 @@ import {
   Body,
   Controller,
   Delete,
-  Get,
   HttpException,
   Post,
-  Req,
   UseGuards,
 } from '@nestjs/common';
-import { LocalGuard } from './guards/local.guard.js';
-import type { Request } from 'express';
-import { JWTGuard } from './guards/jwt.guard.js';
-import { DeletePayloadDTO, RegisterPayloadDTO } from './dto/auth.dto.js';
+import { RegisterPayloadDTO } from './dto/register.dto.js';
 import { UserService } from '../user/user.service.js';
 import * as bcrypt from 'bcrypt';
 import { HeadersGuard } from './guards/headers.guard.js';
+import { EmailService } from '../email/email.service.js';
+import { DeletePayloadDTO } from './dto/delete.dto.js';
+import { EmailVerificationConfirmDTO } from './dto/email-verification-confirm.dto.js';
+import { EmailVerificationDTO } from './dto/email-verification.dto.js';
 
 @UseGuards(HeadersGuard)
 @Controller('auth')
 export class AuthController {
   private saltOrRounds: number = 10;
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private emailService: EmailService,
+  ) {}
 
-  // @Post('login')
-  // @UseGuards(LocalGuard)
-  // login(@Req() req: Request) {
-  //   return req.user;
-  // }
-
-  // @UseGuards(JWTGuard)
-  // @Get('status')
-  // status(@Req() request: Request) {
-  //   return request.user;
-  // }
   @Post('register')
   async register(@Body() req: RegisterPayloadDTO) {
     const password_hash = await bcrypt.hash(req.password, this.saltOrRounds);
@@ -42,6 +33,7 @@ export class AuthController {
       display_name: req.display_name,
     };
     const createdUser = await this.userService.create(newUser);
+    await this.emailVerification({ email: req.email });
     return { user_id: createdUser.id };
   }
 
@@ -53,12 +45,21 @@ export class AuthController {
 
     if (isDeleted) return { message: 'User Deleted Successfully' };
 
-    throw new HttpException({"message":'User Deletion was unsuccessfull', code: "DATA_CONFLICT"}, 409);
+    throw new HttpException(
+      { message: 'User Deletion was unsuccessfull', code: 'DATA_CONFLICT' },
+      409,
+    );
   }
 
-  // @UseGuards(JWTGuard)
-  // @Get("me")
-  // async me(@Req() req: Request){
-  //   // return await this.userService.read(req.email)
-  // }
+  @Post('email-verification')
+  async emailVerification(@Body() dto: EmailVerificationDTO) {
+    await this.emailService.sendOtpToEmail(dto.email);
+    return { messgae: 'Email sent Successfuly' };
+  }
+
+  @Post('email-verification/confirm')
+  async emailVerificationConfirm(@Body() dto: EmailVerificationConfirmDTO) {
+    await this.emailService.verifyToken(dto);
+    return { messgae: 'Email is verified Successfuly' };
+  }
 }
