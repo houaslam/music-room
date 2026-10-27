@@ -14,6 +14,7 @@ import { EmailVerificationConfirmDTO } from './dto/email-verification-confirm.dt
 import { EmailVerificationDTO } from './dto/email-verification.dto.js';
 import { AuthService } from './auth.service.js';
 import { LoginPaylodDTO } from './dto/login.dto.js';
+import { STATUS_CODES } from 'http';
 
 @UseGuards(HeadersGuard)
 @Controller('auth')
@@ -22,14 +23,14 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() dto: RegisterPayloadDTO) {
-    await this.authService.register(dto);
+    return await this.authService.register(dto);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  async login(@Body() dto: LoginPaylodDTO){
-    await this.authService.validateUser(dto)
-    return await this.authService.login(dto.email)
+  async login(@Body() dto: LoginPaylodDTO) {
+    const user = await this.authService.validateUser(dto);
+    return await this.authService.login(user);
   }
 
   // @UseGuards(JWTGuard)
@@ -38,11 +39,13 @@ export class AuthController {
     await this.authService.delete(dto);
   }
 
+  @HttpCode(HttpStatus.ACCEPTED)
   @Post('email-verification')
   async emailVerification(@Body() dto: EmailVerificationDTO) {
     await this.authService.emailVerification(dto);
   }
 
+  @HttpCode(HttpStatus.NO_CONTENT)
   @Post('email-verification/confirm')
   async emailVerificationConfirm(@Body() dto: EmailVerificationConfirmDTO) {
     await this.authService.emailVerificationConfirm(dto);

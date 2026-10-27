@@ -118,16 +118,19 @@
 - auth/email-verification/confirm ✅
     - Method: POST
     - Request Body:
-        - token (string)
+        - email (string)
+        - token (string, exactly 6 digits)
     - Response Body: (empty)
     - Status Codes:
         - 204: OK
-        - 400: TOKEN_INVALID
+        - 400: TOKEN_INVALID (unknown email, unknown/used token, or incorrect code)
         - 400: TOKEN_EXPIRED
+        - 400: TOKEN_ATTEMPTS_EXCEEDED
     - Notes:
-        - mail link: `https://<domain>/verify?token=...` as android app link -> opens app, app sends the POST
-        - no app installed -> small web page with a confirm button (POST)
-        - never consume the token on GET, mail scanners open links automatically. same for reset links
+        - mail contains a 6-digit OTP; the app submits the email and code in the POST body
+        - code expires after 5 minutes; at most 5 attempts per code, including incorrect guesses
+        - expired/used tokens are rejected before reserving an attempt; OTP comparison follows the conditional attempt update
+        - successful confirmation consumes the token and verifies the email
 
 - auth/oauth/{provider}
     - provider: google | facebook

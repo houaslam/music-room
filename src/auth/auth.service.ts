@@ -18,6 +18,7 @@ import { DeletePayloadDTO } from './dto/delete.dto.js';
 import { LoginPaylodDTO } from './dto/login.dto.js';
 import refreshJwtConfig from './config/refresh-jwt.config.js';
 import type { ConfigType } from '@nestjs/config';
+import { Users } from '../user/entity/user.entity.js';
 @Injectable()
 export class AuthService {
   private saltOrRounds: number = 10;
@@ -65,12 +66,12 @@ export class AuthService {
         message: 'Email is not verified!',
       });
     }
-    const { password_hash, ...user } = findUser;
+  const { password_hash, ...user } = findUser;
     return user;
   }
 
-  async login(email: string) {
-    const payload = { email };
+  async login(user:any) {
+    const payload = { sub: user.id };
     return {
       access_token: this.jwtService.sign(payload),
       expires_in: Math.floor((Date.now() + 15 * 60 * 1000) / 1000),
@@ -86,18 +87,21 @@ export class AuthService {
       display_name: req.display_name,
     };
     const createdUser = await this.userService.create(newUser);
-    await this.emailVerification({ email: req.email });
+    try{
+      await this.emailVerification({ email: req.email });
+
+    }catch(error){
+      console.error("Email service failed : ", error)
+    }
     return { user_id: createdUser.id };
   }
 
   async emailVerification(@Body() dto: EmailVerificationDTO) {
     await this.emailService.sendOtpToEmail(dto.email);
-    return { messgae: 'Email sent Successfuly' };
   }
 
   async emailVerificationConfirm(@Body() dto: EmailVerificationConfirmDTO) {
     await this.emailService.verifyToken(dto);
-    return { messgae: 'Email is verified Successfuly' };
   }
 
   async delete(@Body() req: DeletePayloadDTO) {

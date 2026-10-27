@@ -1,8 +1,6 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
-  UnauthorizedException,
 } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
@@ -53,9 +51,13 @@ export class EmailService {
       .andWhere('"expires_at" > CURRENT_TIMESTAMP')
       .execute();
     if (result.affected !== 1) {
-      throw new BadRequestException(
-        'Token unavailable or attempt limit reached',
-      );
+      // State may have changed since the initial check.
+      const token = await this.emailRepository.findOne({ where: { id: tokenId } });
+      this.validateTokenState(token);
+      throw new BadRequestException({
+        code: 'TOKEN_ATTEMPTS_EXCEEDED',
+        message: 'Token attempt limit reached',
+      });
     }
   }
 
@@ -81,9 +83,9 @@ export class EmailService {
   async verifyToken(dto: EmailVerificationConfirmDTO) {
     const user = await this.userService.read({ email: dto.email });
     if (!user)
-      throw new UnauthorizedException({
-        code: 'INVALID_CREDENTIALS',
-        message: 'No user with THIS email',
+      throw new BadRequestException({
+        code: 'TOKEN_INVALID',
+        message: 'Invalid Token',
       });
     const currToken = await this.read(user);
     if (!currToken)
@@ -91,7 +93,6 @@ export class EmailService {
         code: 'TOKEN_INVALID',
         message: 'Invalid Token',
       });
-    await this.reserveAttempt(currToken.id);
     await this.validateToken(currToken, dto.token);
     await this.update(currToken!);
     await this.userService.update({
@@ -130,10 +131,7 @@ export class EmailService {
     );
   }
 
-  async validateToken(
-    token: EmailTokens | null,
-    reqToken: string,
-  ): Promise<boolean> {
+  private validateTokenState(token: EmailTokens | null): asserts token is EmailTokens {
     if (!token)
       throw new BadRequestException({
         code: 'TOKEN_INVALID',
@@ -141,15 +139,22 @@ export class EmailService {
       });
     if (token.consumed_at)
       throw new BadRequestException({
-        code: 'TOKEN_EXPIRED',
-        message: 'Token is already used',
+        code: 'TOKEN_INVALID',
+        message: 'Invalid Token',
       });
     if (token.expires_at <= new Date(Date.now()))
       throw new BadRequestException({
         code: 'TOKEN_EXPIRED',
         message: 'Token is expired',
       });
+  }
 
+  async validateToken(
+    token: EmailTokens | null,
+    reqToken: string,
+  ): Promise<boolean> {
+    this.validateTokenState(token);
+    await this.reserveAttempt(token.id);
     const tokenHash = token.token_hash;
     if (!tokenHash)
       throw new BadRequestException({
@@ -165,18 +170,22 @@ export class EmailService {
     return true;
   }
 
-  async sendOtpToEmail(email: string): Promise<string> {
+  async sendOtpToEmail(email: string): Promise<any> {
     const user = await this.userService.read({ email });
     if (!user)
-      throw new UnauthorizedException({
-        code: 'INVALID_CREDENTIALS',
-        message: 'No User with such email',
-      });
+      return {
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'No User with such email',
+        },
+      };
     if (user.email_verified_at)
-      throw new ConflictException({
-        code: 'EMAIL_VERIFIED',
-        message: 'Email is already verified',
-      });
+      return {
+        error: {
+          code: 'EMAIL_VERIFIED',
+          message: 'Email is already verified',
+        },
+      };
     const findToken = await this.read(user);
     if (
       findToken &&
@@ -184,13 +193,15 @@ export class EmailService {
       !findToken.consumed_at &&
       findToken.expires_at > new Date(Date.now())
     )
-      throw new ConflictException({
-        code: 'TOKEN_SENT',
-        message: 'Token is already sent, retry in 5 mins',
-      });
+      return {
+        error: {
+          code: 'TOKEN_SENT',
+          message: 'Token is already sent, retry in 5 mins',
+        },
+      };
 
     const otp = this.generateOtp();
-    
+
     try {
       const transporter = this.emailTransport();
       await transporter.sendMail({
@@ -200,7 +211,7 @@ export class EmailService {
         text: `Your OTP is ${otp}`,
         html: `<p>Your OTP is <strong>${otp}</strong></p>`,
       });
-      
+
       await this.create(user, otp);
       return otp;
     } catch (error) {
