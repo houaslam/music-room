@@ -1,8 +1,10 @@
 import {
+  IsBoolean,
   IsDate,
   IsDefined,
   IsEmail,
   IsNotEmpty,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -30,6 +32,19 @@ export class UpdateUserChangesDTO {
   @Type(() => Date)
   @IsDate()
   email_verified_at?: Date | null;
+
+  @IsOptional()
+  @IsNumber()
+  login_attemps?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  is_locked?: boolean;
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  unlock_at?: Date | null;
 }
 
 export class UpdateUserDTO {

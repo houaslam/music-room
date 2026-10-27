@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { LoginPaylodDTO } from '../dto/login.dto.js';
 
 @Injectable()
 export class JWTStrategy extends PassportStrategy(Strategy) {
@@ -9,11 +10,11 @@ export class JWTStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.getOrThrow<string>('SECRET_KEY'),
+      secretOrKey: config.getOrThrow<string>('ACCESS_TOKEN_SECRET'),
     });
   }
 
-  validate(payload: any) {
+  validate(payload: LoginPaylodDTO) {
     return payload;
   }
 }
