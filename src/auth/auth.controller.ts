@@ -14,9 +14,11 @@ import { EmailVerificationConfirmDTO } from './dto/email-verification-confirm.dt
 import { EmailVerificationDTO } from './dto/email-verification.dto.js';
 import { AuthService } from './auth.service.js';
 import { LoginPaylodDTO } from './dto/login.dto.js';
-import { STATUS_CODES } from 'http';
+import { Throttle } from '@nestjs/throttler';
+import { RateLimitGuard } from './guards/throttle.guard.js';
 
 @UseGuards(HeadersGuard)
+@UseGuards(RateLimitGuard)
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
@@ -26,6 +28,11 @@ export class AuthController {
     return await this.authService.register(dto);
   }
 
+  // @Throttle({ default: { ttl: 60 * 1000, limit: 120 } })
+  // @Post('refresh')
+  // async refresh() {}
+
+  @Throttle({ default: { ttl: 15 * 60 * 1000, limit: 100 } })
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Body() dto: LoginPaylodDTO) {

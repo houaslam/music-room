@@ -1,19 +1,16 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserService } from './user/user.service.js';
 import { UserModule } from './user/user.module.js';
-import { Users } from './user/entity/user.entity.js';
+import { Users } from './user/entities/user.entity.js';
 import { ProfileModule } from './profile/profile.module.js';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EmailModule } from './email/email.module.js';
-import { EmailTokens } from './email/entity/email.entity.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { EmailTokens } from './email/entities/email.entity.js';
+import { Profiles } from './profile/entities/profiles.entity.js';
 
 @Module({
   imports: [
@@ -27,24 +24,23 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_DATABASE'),
-        entities: [Users, EmailTokens],
+        entities: [Users, EmailTokens, Profiles],
         synchronize: true,
       }),
       inject: [ConfigService],
     }),
-
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'music-room',
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60 * 60 * 1000,
+          limit: 30,
+        },
+      ],
     }),
     AuthModule,
     UserModule,
     ProfileModule,
-    ThrottlerModule.forRoot(),
-    EmailModule
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

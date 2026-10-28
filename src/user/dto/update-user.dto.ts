@@ -9,10 +9,11 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class UpdateUserChangesDTO {
   @IsOptional()
@@ -21,6 +22,8 @@ export class UpdateUserChangesDTO {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   display_name?: string | null;
 
   @ValidateIf((_, value) => value !== undefined)

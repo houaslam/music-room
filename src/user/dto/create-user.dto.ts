@@ -1,4 +1,5 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsNotEmpty, IsString, max, MaxLength, maxLength, MinLength } from 'class-validator';
 
 export class CreateUserDTO {
   @IsEmail()
@@ -10,5 +11,7 @@ export class CreateUserDTO {
 
   @IsNotEmpty()
   @IsString()
-  display_name:string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @MaxLength(50)
+  display_name: string;
 }

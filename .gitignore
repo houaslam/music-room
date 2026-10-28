@@ -57,3 +57,37 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Mobile dependencies and Expo caches
+/mobile/node_modules/
+/mobile/.expo/
+/mobile/.cache/
+/mobile/.metro-health-check*
+/mobile/expo-env.d.ts
+
+# Mobile generated builds and native projects (Expo managed workflow)
+/mobile/dist/
+/mobile/build/
+/mobile/web-build/
+/mobile/ios/
+/mobile/android/
+/mobile/.kotlin/
+
+# Mobile test output
+/mobile/coverage/
+/mobile/.nyc_output/
+
+# Mobile local environment (keep shareable examples)
+/mobile/.env*
+!/mobile/.env.example
+!/mobile/.env.*.example
+
+# Mobile signing credentials and native backup files
+/mobile/**/*.jks
+/mobile/**/*.keystore
+/mobile/**/*.p8
+/mobile/**/*.p12
+/mobile/**/*.key
+/mobile/**/*.pem
+/mobile/**/*.mobileprovision
+/mobile/**/*.orig.*

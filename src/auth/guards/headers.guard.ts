@@ -27,9 +27,11 @@ export class HeadersGuard implements CanActivate {
         Object.values(err.constraints || {}),
       );
       throw new BadRequestException({
-        code: "MISSING_CLIENT_HEADERS",
-        message: 'Header validation failed',
-        errors: errorMessages,
+        error: {
+          code: 'MISSING_CLIENT_HEADERS',
+          message: 'Header validation failed',
+          errors: errorMessages,
+        },
       });
     }
     return true;
