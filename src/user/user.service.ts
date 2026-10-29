@@ -31,19 +31,22 @@ export class UserService {
     return await this.userRepository.save(newUser);
   }
 
-  async delete(deleteUserDTO: DeleteUserDTO): Promise<DeleteResult> {
-    return await this.userRepository
-      .createQueryBuilder()
-      .delete()
-      .from(Users)
-      .where('id = :id', { id: deleteUserDTO.id })
-      .execute();
+  async delete(deleteUserDTO: string): Promise<DeleteResult> {
+    return await this.userRepository.delete(deleteUserDTO);
   }
 
   async read(readUserDTO: ReadUserDTO): Promise<Users | null> {
     return await this.userRepository.findOne({
       where: {
         email: readUserDTO.email,
+      },
+    });
+  }
+
+  async findById(id: string): Promise<Users | null> {
+    return await this.userRepository.findOne({
+      where: {
+        id,
       },
     });
   }

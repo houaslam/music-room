@@ -21,11 +21,12 @@ export class RefreshTokenService {
     return findToken;
   }
 
-  async create(id: string, token: string) {
+  async create(id: string, token: string, expires_at:Date) {
     const createdToken = this.refreshTokenRepository.create({
       users_id: { id },
       token_hash: await this.passwordHasher.hash(token),
+      expires_at
     });
-    await this.refreshTokenRepository.save(createdToken);
+    return await this.refreshTokenRepository.save(createdToken);
   }
 }

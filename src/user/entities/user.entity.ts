@@ -42,10 +42,11 @@ export class Users {
   @IsNumber()
   login_attemps: number;
 
-  @Column({ type: 'boolean', default: false })
-  @IsBoolean()
-  is_locked: boolean;
-
   @Column({ type: 'timestamptz' , nullable: true})
   unlock_at: Date | null;
+
+
+  @Column({ type: 'timestamptz' , nullable: true})
+  failed_login_window_started_at: Date | null;
+
 }

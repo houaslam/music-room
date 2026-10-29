@@ -11,6 +11,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { EmailModule } from './email/email.module.js';
 import { EmailTokens } from './email/entities/email.entity.js';
 import { Profiles } from './profile/entities/profiles.entity.js';
+import { RefreshTokens } from './auth/entities/refresh-tokens.entity.js';
+import { RefreshFamilies } from './auth/entities/refresh-families.entity.js';
 
 @Module({
   imports: [
@@ -24,7 +26,13 @@ import { Profiles } from './profile/entities/profiles.entity.js';
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_DATABASE'),
-        entities: [Users, EmailTokens, Profiles],
+        entities: [
+          Users,
+          EmailTokens,
+          Profiles,
+          RefreshTokens,
+          RefreshFamilies,
+        ],
         synchronize: true,
       }),
       inject: [ConfigService],

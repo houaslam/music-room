@@ -24,8 +24,17 @@ import { InjectEntityManager } from '@nestjs/typeorm';
 import { Users } from '../user/entities/user.entity.js';
 import { Profiles } from '../profile/entities/profiles.entity.js';
 import { EmailVerificationService } from '../email/email-verification.service.js';
+import { RefreshPlayloadDTO } from './dto/refresh.dto.js';
+import { RefreshTokens } from './entities/refresh-tokens.entity.js';
+import { randomUUID } from 'node:crypto';
+import type { JwtPayload } from 'jsonwebtoken';
+import { DeviceHeadersDto } from './dto/headers-validation.dto.js';
+import { RefreshFamilies } from './entities/refresh-families.entity.js';
+import { isUUID } from 'class-validator';
+
 @Injectable()
 export class AuthService {
+  private dummy_password_hash: Promise<string>;
   constructor(
     private jwtService: JwtService,
     @Inject(refreshJwtConfig.KEY)
@@ -35,24 +44,37 @@ export class AuthService {
     private entityManager: EntityManager,
     private readonly passwordHasher: PasswordHasher,
     private readonly emailVerificationService: EmailVerificationService,
-  ) {}
+  ) {
+    const comparePassword = randomUUID();
+    this.dummy_password_hash = this.passwordHasher.hash(comparePassword);
+  }
 
   async validateUser({ email, password }: LoginPaylodDTO) {
-    const findUser = await this.userService.read({ email });
-    if (!findUser) {
-      throw new UnauthorizedException({
-        error: {
-          code: 'INVALID_CREDENTIALS',
-          message: getMessage('auth', 'INVALID_CREDENTIALS'),
-        },
-      });
+    const user = await this.userService.read({ email });
+    if (!user) {
+      await this.passwordHasher.verify(
+        password,
+        await this.dummy_password_hash,
+      );
+
+      this.rejectInvalidCredentials();
     }
 
-    const isMatch = await this.passwordHasher.verify(
-      password,
-      findUser.password_hash,
-    );
-    if (findUser.is_locked) {
+    this.assertAccountNotLocked(user);
+    const isMatch = await this.verifyPassword(password, user);
+    if (!isMatch) {
+      await this.recordFailedLogin(user.id);
+      this.rejectInvalidCredentials();
+    }
+
+    this.assertEmailVerified(user);
+    const validatedUser = await this.resetLoginFailures(user.id);
+    const { password_hash, ...safeUser } = validatedUser;
+    return safeUser;
+  }
+
+  private assertAccountNotLocked(user: Users) {
+    if (user.unlock_at && user.unlock_at.getTime() > Date.now()) {
       throw new HttpException(
         {
           error: {
@@ -63,23 +85,39 @@ export class AuthService {
         429,
       );
     }
-    if (!isMatch) {
-      await this.userService.update({
-        id: findUser.id,
-        changes: {
-          login_attemps: findUser.login_attemps + 1,
-          is_locked: findUser.login_attemps + 1 >= 3,
-          unlock_at: new Date(Date.now() + 15 * 60 * 1000),
-        },
+  }
+
+  private verifyPassword(password: string, user: Users) {
+    return this.passwordHasher.verify(password, user.password_hash);
+  }
+
+  private async recordFailedLogin(userId: string) {
+    await this.entityManager.transaction(async (manager) => {
+      const user = await this.readUserForLoginUpdate(manager, userId);
+      this.assertAccountNotLocked(user);
+
+      const now = Date.now();
+      const windowMs = 15 * 60 * 1000;
+      const lockExpired =
+        user.unlock_at !== null && user.unlock_at.getTime() <= now;
+      const windowExpired =
+        !user.failed_login_window_started_at ||
+        now - user.failed_login_window_started_at.getTime() >= windowMs;
+      const startNewWindow = lockExpired || windowExpired;
+      const attempts = startNewWindow ? 1 : user.login_attemps + 1;
+
+      await manager.update(Users, userId, {
+        login_attemps: attempts,
+        failed_login_window_started_at: startNewWindow
+          ? new Date(now)
+          : user.failed_login_window_started_at,
+        unlock_at: attempts >= 5 ? new Date(now + windowMs) : null,
       });
-      throw new UnauthorizedException({
-        error: {
-          code: 'INVALID_CREDENTIALS',
-          message: getMessage('auth', 'INVALID_CREDENTIALS'),
-        },
-      });
-    }
-    if (!findUser.email_verified_at) {
+    });
+  }
+
+  private assertEmailVerified(user: Users) {
+    if (!user.email_verified_at) {
       throw new ForbiddenException({
         error: {
           code: 'EMAIL_NOT_VERIFIED',
@@ -87,17 +125,62 @@ export class AuthService {
         },
       });
     }
-    const { password_hash, ...user } = findUser;
+  }
+
+  private async resetLoginFailures(userId: string) {
+    return this.entityManager.transaction(async (manager) => {
+      const user = await this.readUserForLoginUpdate(manager, userId);
+      this.assertAccountNotLocked(user);
+      const changes = {
+        login_attemps: 0,
+        unlock_at: null,
+        failed_login_window_started_at: null,
+      };
+      await manager.update(Users, userId, changes);
+      return Object.assign(user, changes);
+    });
+  }
+
+  private async readUserForLoginUpdate(manager: EntityManager, userId: string) {
+    const user = await manager.findOne(Users, {
+      where: { id: userId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!user) this.rejectInvalidCredentials();
     return user;
   }
 
-  async login(user: any) {
-    const payload = { sub: user.id };
-    return {
-      access_token: this.jwtService.sign(payload),
-      expires_in: Math.floor((Date.now() + 15 * 60 * 1000) / 1000),
-      refresh_token: this.jwtService.sign(payload, this.refreshTokenConfig),
-    };
+  private rejectInvalidCredentials(): never {
+    throw new UnauthorizedException({
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        message: getMessage('auth', 'INVALID_CREDENTIALS'),
+      },
+    });
+  }
+
+  async login(user: { id: string }, headers: DeviceHeadersDto) {
+    const tokens = await this.generateTokens(user.id);
+
+    await this.entityManager.transaction(async (manager) => {
+      const family = await manager.save(RefreshFamilies, {
+        user_id: user.id,
+        device_id: headers.deviceId,
+        revoked_at: null,
+      });
+      await manager.insert(RefreshTokens, {
+        users_id: { id: user.id },
+        family_id: family.id,
+        device_id: headers.deviceId,
+        jti: tokens.jti,
+        token_hash: tokens.token_hash,
+        expires_at: tokens.expires_at,
+        used_at: null,
+        revoked_at: null,
+      });
+    });
+
+    return tokens.response;
   }
 
   async userSaveTransaction(userPayload: any) {
@@ -143,7 +226,7 @@ export class AuthService {
     try {
       await this.emailVerification({ email: req.email });
     } catch (error) {
-      console.log(getMessage('auth', 'EMAIL_DELIVERY_FAILED'), error);
+      console.error(getMessage('auth', 'EMAIL_DELIVERY_FAILED'), error);
     }
     return { user_id: user.id };
   }
@@ -156,8 +239,8 @@ export class AuthService {
     await this.emailVerificationService.verifyToken(dto);
   }
 
-  async delete(@Body() req: DeletePayloadDTO) {
-    const deleteUser = await this.userService.delete(req);
+  async delete(req: DeletePayloadDTO) {
+    const deleteUser = await this.userService.delete(req.id);
     const isDeleted = deleteUser.affected === 1;
 
     if (isDeleted) return { message: getMessage('auth', 'USER_DELETED') };
@@ -171,5 +254,173 @@ export class AuthService {
       },
       409,
     );
+  }
+
+  async refresh(dto: RefreshPlayloadDTO) {
+    const claims = await this.readRefreshClaims(dto.refresh_token);
+    if (!claims) throw this.invalidRefreshToken();
+
+    const response = await this.entityManager.transaction(async (manager) => {
+      const session = await this.lockRefreshSession(manager, claims);
+      if (!session) return null;
+      const { token, family } = session;
+
+      if (
+        !(await this.passwordHasher.verify(dto.refresh_token, token.token_hash))
+      ) {
+        return null;
+      }
+
+      if (token.used_at) {
+        await manager.update(RefreshFamilies, family.id, {
+          revoked_at: new Date(),
+        });
+        return null;
+      }
+
+      if (token.revoked_at || token.expires_at.getTime() <= Date.now()) {
+        return null;
+      }
+
+      const next = await this.generateTokens(claims.sub);
+      await manager.update(RefreshTokens, token.id, { used_at: new Date() });
+      await manager.insert(RefreshTokens, {
+        users_id: { id: claims.sub },
+        family_id: family.id,
+        device_id: family.device_id,
+        jti: next.jti,
+        token_hash: next.token_hash,
+        expires_at: next.expires_at,
+        used_at: null,
+        revoked_at: null,
+      });
+      return next.response;
+    });
+
+    // Throw outside the transaction so reuse revocation is committed.
+    if (!response) throw this.invalidRefreshToken();
+    return response;
+  }
+
+  private async generateTokens(userId: string) {
+    const accessToken = await this.jwtService.signAsync({ sub: userId });
+
+    const refreshToken = await this.jwtService.signAsync(
+      { sub: userId, jti: randomUUID() },
+      this.refreshTokenConfig,
+    );
+
+    const access = this.jwtService.decode<JwtPayload>(accessToken);
+    const refresh = this.jwtService.decode<JwtPayload>(refreshToken);
+
+    if (!access.exp || !access.iat || !refresh.exp || !refresh.jti) {
+      throw new InternalServerErrorException('Token expiry is not configured');
+    }
+
+    return {
+      response: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: access.exp - access.iat,
+      },
+      token_hash: await this.passwordHasher.hash(refreshToken),
+      expires_at: new Date(refresh.exp * 1000),
+      jti: refresh.jti,
+    };
+  }
+
+  async me(userId: string) {
+    const user = await this.userService.findById(userId);
+    if (!user)
+      throw new UnauthorizedException({
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: getMessage('auth', 'INVALID_CREDENTIALS'),
+        },
+      });
+
+    return {
+      user_id: user.id,
+      email: user.email,
+      email_verified: Boolean(user.email_verified_at),
+      has_password: Boolean(user.password_hash),
+      linked_providers: [],
+    };
+  }
+
+  async logout(raw: string) {
+    const claims = await this.readRefreshClaims(raw);
+    if (!claims) return;
+
+    await this.entityManager.transaction(async (manager) => {
+      const session = await this.lockRefreshSession(manager, claims);
+      if (!session) return;
+
+      if (!(await this.passwordHasher.verify(raw, session.token.token_hash))) {
+        return;
+      }
+
+      await manager.update(RefreshFamilies, session.family.id, {
+        revoked_at: new Date(),
+      });
+    });
+  }
+
+  private async readRefreshClaims(raw: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(raw, {
+        secret: this.refreshTokenConfig.secret,
+      });
+
+      if (
+        typeof payload.sub !== 'string' ||
+        !isUUID(payload.sub) ||
+        typeof payload.jti !== 'string' ||
+        !isUUID(payload.jti) ||
+        typeof payload.exp !== 'number'
+      ) {
+        return null;
+      }
+
+      return { sub: payload.sub, jti: payload.jti };
+    } catch {
+      return null;
+    }
+  }
+
+  private invalidRefreshToken() {
+    return new UnauthorizedException({
+      error: {
+        code: 'INVALID_REFRESH_TOKEN',
+        message: getMessage('auth', 'INVALID_REFRESH_TOKEN'),
+      },
+    });
+  }
+
+  private async lockRefreshSession(
+    manager: EntityManager,
+    claims: { sub: string; jti: string },
+  ) {
+    const existing = await manager.findOne(RefreshTokens, {
+      where: { jti: claims.jti },
+    });
+
+    if (!existing) return null;
+
+    const family = await manager.findOne(RefreshFamilies, {
+      where: {
+        id: existing.family_id,
+        user_id: claims.sub,
+      },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!family || family.revoked_at) return null;
+
+    const token = await manager.findOne(RefreshTokens, {
+      where: { id: existing.id },
+    });
+
+    return token ? { token, family } : null;
   }
 }

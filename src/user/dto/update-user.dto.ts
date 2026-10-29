@@ -48,6 +48,11 @@ export class UpdateUserChangesDTO {
   @Type(() => Date)
   @IsDate()
   unlock_at?: Date | null;
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  failed_login_window_started_at?: Date | null;
 }
 
 export class UpdateUserDTO {

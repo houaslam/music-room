@@ -1,14 +1,15 @@
-
 import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Users } from '../../user/entities/user.entity.js';
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import { IsNotEmpty } from 'class-validator';
+import { RefreshFamilies } from './refresh-families.entity.js';
 
 @Entity()
 export class RefreshTokens {
@@ -19,12 +20,22 @@ export class RefreshTokens {
   @JoinColumn({ name: 'user_id' })
   users_id: Users;
 
-  @IsUUID()
-  @IsNotEmpty()
+  @Column('uuid')
+  @Index()
   family_id: string;
 
-  @IsUUID()
+  @ManyToOne(() => RefreshFamilies, { onDelete: 'CASCADE', nullable: false })
+  @JoinColumn({ name: 'family_id' })
+  family: RefreshFamilies;
+
+  @Column('uuid')
   device_id: string;
+
+  @Column({ type: 'uuid', unique: true })
+  jti: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  used_at: Date | null;
 
   @Column({ unique: true, type: 'text' })
   @IsNotEmpty()
@@ -37,8 +48,9 @@ export class RefreshTokens {
 
   @Column({
     type: 'timestamptz',
+    nullable: true,
   })
-  revoked_at: Date;
+  revoked_at: Date | null;
 
   @CreateDateColumn({
     type: 'timestamptz',

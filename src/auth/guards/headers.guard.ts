@@ -4,8 +4,6 @@ import {
   ExecutionContext,
   Injectable,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { Observable } from 'rxjs';
 import { DeviceHeadersDto } from '../dto/headers-validation.dto.js';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -34,6 +32,7 @@ export class HeadersGuard implements CanActivate {
         },
       });
     }
+    request.device = dtoInstance;
     return true;
   }
 }

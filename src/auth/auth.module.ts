@@ -13,6 +13,10 @@ import jwtConfig from './config/jwt.config.js';
 import refreshJwtConfig from './config/refresh-jwt.config.js';
 import { ProfileModule } from '../profile/profile.module.js';
 import { RateLimitGuard } from './guards/throttle.guard.js';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { RefreshTokens } from './entities/refresh-tokens.entity.js';
+import { RefreshTokenService } from './refresh-tokens.service.js';
+import { Users } from '../user/entities/user.entity.js';
 
 @Module({
   imports: [
@@ -24,8 +28,10 @@ import { RateLimitGuard } from './guards/throttle.guard.js';
     ConfigModule.forFeature(jwtConfig),
     ConfigModule.forFeature(refreshJwtConfig),
     ProfileModule,
+    TypeOrmModule.forFeature([RefreshTokens]),
+    TypeOrmModule.forFeature([Users])
   ],
   controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JWTStrategy, RateLimitGuard],
+  providers: [AuthService, LocalStrategy, JWTStrategy, RateLimitGuard, RefreshTokenService],
 })
 export class AuthModule {}
