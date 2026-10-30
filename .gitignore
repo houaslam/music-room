@@ -91,3 +91,5 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 /mobile/**/*.pem
 /mobile/**/*.mobileprovision
 /mobile/**/*.orig.*
+
+/pdfs/

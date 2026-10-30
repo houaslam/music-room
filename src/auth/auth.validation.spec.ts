@@ -1,5 +1,6 @@
 import { AuthService } from './auth.service.js';
 import { Users } from '../user/entities/user.entity.js';
+import { UserService } from '../user/user.service.js';
 
 const windowMs = 15 * 60 * 1000;
 
@@ -39,7 +40,8 @@ describe('AuthService credential validation', () => {
     service = new AuthService(
       {} as never,
       {} as never,
-      { read } as never,
+      Object.assign(new UserService({} as never), { read }),
+      {} as never,
       {
         transaction: async (callback: (value: typeof manager) => unknown) =>
           callback(manager),

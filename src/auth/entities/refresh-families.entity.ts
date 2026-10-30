@@ -27,3 +27,4 @@ export class RefreshFamilies {
   @Column({ type: 'timestamptz', nullable: true })
   revoked_at: Date | null;
 }
+

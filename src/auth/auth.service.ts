@@ -19,7 +19,7 @@ import { DeletePayloadDTO } from './dto/delete.dto.js';
 import { LoginPaylodDTO } from './dto/login.dto.js';
 import refreshJwtConfig from './config/refresh-jwt.config.js';
 import type { ConfigType } from '@nestjs/config';
-import { EntityManager } from 'typeorm';
+import { EntityManager, IsNull } from 'typeorm';
 import { InjectEntityManager } from '@nestjs/typeorm';
 import { Users } from '../user/entities/user.entity.js';
 import { Profiles } from '../profile/entities/profiles.entity.js';
@@ -31,6 +31,7 @@ import type { JwtPayload } from 'jsonwebtoken';
 import { DeviceHeadersDto } from './dto/headers-validation.dto.js';
 import { RefreshFamilies } from './entities/refresh-families.entity.js';
 import { isUUID } from 'class-validator';
+import { RefreshTokenService } from './refresh-tokens.service.js';
 
 @Injectable()
 export class AuthService {
@@ -40,6 +41,7 @@ export class AuthService {
     @Inject(refreshJwtConfig.KEY)
     private refreshTokenConfig: ConfigType<typeof refreshJwtConfig>,
     private userService: UserService,
+    private refreshTokenService: RefreshTokenService,
     @InjectEntityManager()
     private entityManager: EntityManager,
     private readonly passwordHasher: PasswordHasher,
@@ -60,31 +62,17 @@ export class AuthService {
       this.rejectInvalidCredentials();
     }
 
-    this.assertAccountNotLocked(user);
+    this.userService.assertAccountNotLocked(user);
     const isMatch = await this.verifyPassword(password, user);
     if (!isMatch) {
       await this.recordFailedLogin(user.id);
       this.rejectInvalidCredentials();
     }
 
-    this.assertEmailVerified(user);
+    this.userService.assertEmailVerified(user);
     const validatedUser = await this.resetLoginFailures(user.id);
     const { password_hash, ...safeUser } = validatedUser;
     return safeUser;
-  }
-
-  private assertAccountNotLocked(user: Users) {
-    if (user.unlock_at && user.unlock_at.getTime() > Date.now()) {
-      throw new HttpException(
-        {
-          error: {
-            code: 'ACCOUNT_LOCKED',
-            message: getMessage('auth', 'ACCOUNT_LOCKED'),
-          },
-        },
-        429,
-      );
-    }
   }
 
   private verifyPassword(password: string, user: Users) {
@@ -94,7 +82,7 @@ export class AuthService {
   private async recordFailedLogin(userId: string) {
     await this.entityManager.transaction(async (manager) => {
       const user = await this.readUserForLoginUpdate(manager, userId);
-      this.assertAccountNotLocked(user);
+      this.userService.assertAccountNotLocked(user);
 
       const now = Date.now();
       const windowMs = 15 * 60 * 1000;
@@ -116,21 +104,10 @@ export class AuthService {
     });
   }
 
-  private assertEmailVerified(user: Users) {
-    if (!user.email_verified_at) {
-      throw new ForbiddenException({
-        error: {
-          code: 'EMAIL_NOT_VERIFIED',
-          message: getMessage('auth', 'EMAIL_NOT_VERIFIED'),
-        },
-      });
-    }
-  }
-
   private async resetLoginFailures(userId: string) {
     return this.entityManager.transaction(async (manager) => {
       const user = await this.readUserForLoginUpdate(manager, userId);
-      this.assertAccountNotLocked(user);
+      this.userService.assertAccountNotLocked(user);
       const changes = {
         login_attemps: 0,
         unlock_at: null,
@@ -160,7 +137,7 @@ export class AuthService {
   }
 
   async login(user: { id: string }, headers: DeviceHeadersDto) {
-    const tokens = await this.generateTokens(user.id);
+    const tokens = await this.refreshTokenService.generateTokens(user.id);
 
     await this.entityManager.transaction(async (manager) => {
       const family = await manager.save(RefreshFamilies, {
@@ -257,8 +234,10 @@ export class AuthService {
   }
 
   async refresh(dto: RefreshPlayloadDTO) {
-    const claims = await this.readRefreshClaims(dto.refresh_token);
-    if (!claims) throw this.invalidRefreshToken();
+    const claims = await this.refreshTokenService.readRefreshClaims(
+      dto.refresh_token,
+    );
+    if (!claims) throw this.refreshTokenService.invalidRefreshToken();
 
     const response = await this.entityManager.transaction(async (manager) => {
       const session = await this.lockRefreshSession(manager, claims);
@@ -282,7 +261,7 @@ export class AuthService {
         return null;
       }
 
-      const next = await this.generateTokens(claims.sub);
+      const next = await this.refreshTokenService.generateTokens(claims.sub);
       await manager.update(RefreshTokens, token.id, { used_at: new Date() });
       await manager.insert(RefreshTokens, {
         users_id: { id: claims.sub },
@@ -297,36 +276,8 @@ export class AuthService {
       return next.response;
     });
 
-    // Throw outside the transaction so reuse revocation is committed.
-    if (!response) throw this.invalidRefreshToken();
+    if (!response) throw this.refreshTokenService.invalidRefreshToken();
     return response;
-  }
-
-  private async generateTokens(userId: string) {
-    const accessToken = await this.jwtService.signAsync({ sub: userId });
-
-    const refreshToken = await this.jwtService.signAsync(
-      { sub: userId, jti: randomUUID() },
-      this.refreshTokenConfig,
-    );
-
-    const access = this.jwtService.decode<JwtPayload>(accessToken);
-    const refresh = this.jwtService.decode<JwtPayload>(refreshToken);
-
-    if (!access.exp || !access.iat || !refresh.exp || !refresh.jti) {
-      throw new InternalServerErrorException('Token expiry is not configured');
-    }
-
-    return {
-      response: {
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_in: access.exp - access.iat,
-      },
-      token_hash: await this.passwordHasher.hash(refreshToken),
-      expires_at: new Date(refresh.exp * 1000),
-      jti: refresh.jti,
-    };
   }
 
   async me(userId: string) {
@@ -349,7 +300,7 @@ export class AuthService {
   }
 
   async logout(raw: string) {
-    const claims = await this.readRefreshClaims(raw);
+    const claims = await this.refreshTokenService.readRefreshClaims(raw);
     if (!claims) return;
 
     await this.entityManager.transaction(async (manager) => {
@@ -366,34 +317,17 @@ export class AuthService {
     });
   }
 
-  private async readRefreshClaims(raw: string) {
-    try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload>(raw, {
-        secret: this.refreshTokenConfig.secret,
-      });
+  async logoutAll(userId: string) {
+    await this.entityManager.transaction(async (manager) => {
+      await this.lockAllRefreshSession(manager, userId);
 
-      if (
-        typeof payload.sub !== 'string' ||
-        !isUUID(payload.sub) ||
-        typeof payload.jti !== 'string' ||
-        !isUUID(payload.jti) ||
-        typeof payload.exp !== 'number'
-      ) {
-        return null;
-      }
-
-      return { sub: payload.sub, jti: payload.jti };
-    } catch {
-      return null;
-    }
-  }
-
-  private invalidRefreshToken() {
-    return new UnauthorizedException({
-      error: {
-        code: 'INVALID_REFRESH_TOKEN',
-        message: getMessage('auth', 'INVALID_REFRESH_TOKEN'),
-      },
+      await manager.update(
+        RefreshFamilies,
+        { user_id: userId },
+        {
+          revoked_at: new Date(),
+        },
+      );
     });
   }
 
@@ -422,5 +356,15 @@ export class AuthService {
     });
 
     return token ? { token, family } : null;
+  }
+
+  private async lockAllRefreshSession(manager: EntityManager, userId: string) {
+    const families = await manager.find(RefreshFamilies, {
+      where: {
+        user_id: userId,
+      },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
   }
 }

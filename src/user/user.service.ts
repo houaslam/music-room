@@ -1,5 +1,10 @@
 import { getMessage } from '../messages.js';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Users } from './entities/user.entity.js';
 import { DeleteResult, Repository, UpdateResult } from 'typeorm';
@@ -53,5 +58,30 @@ export class UserService {
 
   async update(dto: UpdateUserDTO): Promise<UpdateResult> {
     return await this.userRepository.update(dto.id, dto.changes);
+  }
+
+  assertAccountNotLocked(user: Users) {
+    if (user.unlock_at && user.unlock_at.getTime() > Date.now()) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'ACCOUNT_LOCKED',
+            message: getMessage('auth', 'ACCOUNT_LOCKED'),
+          },
+        },
+        429,
+      );
+    }
+  }
+
+  assertEmailVerified(user: Users) {
+    if (!user.email_verified_at) {
+      throw new ForbiddenException({
+        error: {
+          code: 'EMAIL_NOT_VERIFIED',
+          message: getMessage('auth', 'EMAIL_NOT_VERIFIED'),
+        },
+      });
+    }
   }
 }
