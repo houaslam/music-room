@@ -1,16 +1,19 @@
 import {
+  IsBoolean,
   IsDate,
   IsDefined,
   IsEmail,
   IsNotEmpty,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class UpdateUserChangesDTO {
   @IsOptional()
@@ -19,6 +22,8 @@ export class UpdateUserChangesDTO {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   display_name?: string | null;
 
   @ValidateIf((_, value) => value !== undefined)
@@ -30,6 +35,24 @@ export class UpdateUserChangesDTO {
   @Type(() => Date)
   @IsDate()
   email_verified_at?: Date | null;
+
+  @IsOptional()
+  @IsNumber()
+  login_attemps?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  is_locked?: boolean;
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  unlock_at?: Date | null;
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  failed_login_window_started_at?: Date | null;
 }
 
 export class UpdateUserDTO {

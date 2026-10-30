@@ -1,3 +1,4 @@
+import { IsBoolean, IsNumber } from 'class-validator';
 import {
   Column,
   CreateDateColumn,
@@ -36,4 +37,16 @@ export class Users {
     onUpdate: 'CURRENT_TIMESTAMP(6)',
   })
   updated_at: Date;
+
+  @Column({ type: 'int', default: 0 })
+  @IsNumber()
+  login_attemps: number;
+
+  @Column({ type: 'timestamptz' , nullable: true})
+  unlock_at: Date | null;
+
+
+  @Column({ type: 'timestamptz' , nullable: true})
+  failed_login_window_started_at: Date | null;
+
 }

@@ -7,7 +7,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { Users } from '../../user/entity/user.entity.js';
+import { Users } from '../../user/entities/user.entity.js';
 import { EmailTypeEnum } from './email.enum.js';
 import { IsNotEmpty } from 'class-validator';
 
@@ -47,4 +47,7 @@ export class EmailTokens {
 
   @Column({ type: 'int', default: 0 })
   attempts: number;
+
+  @Column({ type: 'boolean', default: false })
+  is_sent: boolean;
 }

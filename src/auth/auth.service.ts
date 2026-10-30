@@ -1,19 +1,426 @@
-import { Injectable } from '@nestjs/common';
+import { getMessage } from '../messages.js';
+import {
+  Body,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { AuthPayloadDTO } from './dto/auth.dto.js';
 import { UserService } from '../user/user.service.js';
-import * as bcrypt from "bcrypt"
-
+import { PasswordHasher } from '@nestjs/authentication';
+import { RegisterPayloadDTO } from './dto/register.dto.js';
+import { EmailVerificationDTO } from './dto/email-verification.dto.js';
+import { EmailVerificationConfirmDTO } from './dto/email-verification-confirm.dto.js';
+import { DeletePayloadDTO } from './dto/delete.dto.js';
+import { LoginPaylodDTO } from './dto/login.dto.js';
+import refreshJwtConfig from './config/refresh-jwt.config.js';
+import type { ConfigType } from '@nestjs/config';
+import { EntityManager } from 'typeorm';
+import { InjectEntityManager } from '@nestjs/typeorm';
+import { Users } from '../user/entities/user.entity.js';
+import { Profiles } from '../profile/entities/profiles.entity.js';
+import { EmailVerificationService } from '../email/email-verification.service.js';
+import { RefreshPlayloadDTO } from './dto/refresh.dto.js';
+import { RefreshTokens } from './entities/refresh-tokens.entity.js';
+import { randomUUID } from 'node:crypto';
+import type { JwtPayload } from 'jsonwebtoken';
+import { DeviceHeadersDto } from './dto/headers-validation.dto.js';
+import { RefreshFamilies } from './entities/refresh-families.entity.js';
+import { isUUID } from 'class-validator';
 
 @Injectable()
 export class AuthService {
-  constructor(private jwtService: JwtService, private userService: UserService) {}
-  async validateUser({ username, password }: AuthPayloadDTO) {
-    const findUser = await this.userService.read({email:username});
-    if (!findUser) return null;
-    if (!bcrypt.compare(password, findUser.password_hash)) {
-      const { password_hash, ...user } = findUser;
-      return this.jwtService.sign(user);
+  private dummy_password_hash: Promise<string>;
+  constructor(
+    private jwtService: JwtService,
+    @Inject(refreshJwtConfig.KEY)
+    private refreshTokenConfig: ConfigType<typeof refreshJwtConfig>,
+    private userService: UserService,
+    @InjectEntityManager()
+    private entityManager: EntityManager,
+    private readonly passwordHasher: PasswordHasher,
+    private readonly emailVerificationService: EmailVerificationService,
+  ) {
+    const comparePassword = randomUUID();
+    this.dummy_password_hash = this.passwordHasher.hash(comparePassword);
+  }
+
+  async validateUser({ email, password }: LoginPaylodDTO) {
+    const user = await this.userService.read({ email });
+    if (!user) {
+      await this.passwordHasher.verify(
+        password,
+        await this.dummy_password_hash,
+      );
+
+      this.rejectInvalidCredentials();
     }
+
+    this.assertAccountNotLocked(user);
+    const isMatch = await this.verifyPassword(password, user);
+    if (!isMatch) {
+      await this.recordFailedLogin(user.id);
+      this.rejectInvalidCredentials();
+    }
+
+    this.assertEmailVerified(user);
+    const validatedUser = await this.resetLoginFailures(user.id);
+    const { password_hash, ...safeUser } = validatedUser;
+    return safeUser;
+  }
+
+  private assertAccountNotLocked(user: Users) {
+    if (user.unlock_at && user.unlock_at.getTime() > Date.now()) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'ACCOUNT_LOCKED',
+            message: getMessage('auth', 'ACCOUNT_LOCKED'),
+          },
+        },
+        429,
+      );
+    }
+  }
+
+  private verifyPassword(password: string, user: Users) {
+    return this.passwordHasher.verify(password, user.password_hash);
+  }
+
+  private async recordFailedLogin(userId: string) {
+    await this.entityManager.transaction(async (manager) => {
+      const user = await this.readUserForLoginUpdate(manager, userId);
+      this.assertAccountNotLocked(user);
+
+      const now = Date.now();
+      const windowMs = 15 * 60 * 1000;
+      const lockExpired =
+        user.unlock_at !== null && user.unlock_at.getTime() <= now;
+      const windowExpired =
+        !user.failed_login_window_started_at ||
+        now - user.failed_login_window_started_at.getTime() >= windowMs;
+      const startNewWindow = lockExpired || windowExpired;
+      const attempts = startNewWindow ? 1 : user.login_attemps + 1;
+
+      await manager.update(Users, userId, {
+        login_attemps: attempts,
+        failed_login_window_started_at: startNewWindow
+          ? new Date(now)
+          : user.failed_login_window_started_at,
+        unlock_at: attempts >= 5 ? new Date(now + windowMs) : null,
+      });
+    });
+  }
+
+  private assertEmailVerified(user: Users) {
+    if (!user.email_verified_at) {
+      throw new ForbiddenException({
+        error: {
+          code: 'EMAIL_NOT_VERIFIED',
+          message: getMessage('auth', 'EMAIL_NOT_VERIFIED'),
+        },
+      });
+    }
+  }
+
+  private async resetLoginFailures(userId: string) {
+    return this.entityManager.transaction(async (manager) => {
+      const user = await this.readUserForLoginUpdate(manager, userId);
+      this.assertAccountNotLocked(user);
+      const changes = {
+        login_attemps: 0,
+        unlock_at: null,
+        failed_login_window_started_at: null,
+      };
+      await manager.update(Users, userId, changes);
+      return Object.assign(user, changes);
+    });
+  }
+
+  private async readUserForLoginUpdate(manager: EntityManager, userId: string) {
+    const user = await manager.findOne(Users, {
+      where: { id: userId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!user) this.rejectInvalidCredentials();
+    return user;
+  }
+
+  private rejectInvalidCredentials(): never {
+    throw new UnauthorizedException({
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        message: getMessage('auth', 'INVALID_CREDENTIALS'),
+      },
+    });
+  }
+
+  async login(user: { id: string }, headers: DeviceHeadersDto) {
+    const tokens = await this.generateTokens(user.id);
+
+    await this.entityManager.transaction(async (manager) => {
+      const family = await manager.save(RefreshFamilies, {
+        user_id: user.id,
+        device_id: headers.deviceId,
+        revoked_at: null,
+      });
+      await manager.insert(RefreshTokens, {
+        users_id: { id: user.id },
+        family_id: family.id,
+        device_id: headers.deviceId,
+        jti: tokens.jti,
+        token_hash: tokens.token_hash,
+        expires_at: tokens.expires_at,
+        used_at: null,
+        revoked_at: null,
+      });
+    });
+
+    return tokens.response;
+  }
+
+  async userSaveTransaction(userPayload: any) {
+    return await this.entityManager.transaction(async (manager) => {
+      try {
+        const savedUser = await manager.save(Users, userPayload);
+        await manager.save(Profiles, {
+          user_id: savedUser.id,
+          display_name: savedUser.display_name,
+        });
+        return savedUser;
+      } catch (error: any) {
+        const errorCode = error.code || error.errno;
+        const isDuplicate = errorCode === '23505' || errorCode === 1062;
+
+        if (isDuplicate) {
+          throw new ConflictException({
+            error: {
+              code: 'EMAIL_TAKEN',
+              message: getMessage('auth', 'EMAIL_TAKEN'),
+            },
+          });
+        }
+
+        throw new InternalServerErrorException({
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: getMessage('auth', 'INTERNAL_ERROR'),
+          },
+        });
+      }
+    });
+  }
+
+  async register(@Body() req: RegisterPayloadDTO) {
+    const password_hash = await this.passwordHasher.hash(req.password);
+    const user = await this.userSaveTransaction({
+      email: req.email,
+      password_hash,
+      display_name: req.display_name,
+    });
+
+    try {
+      await this.emailVerification({ email: req.email });
+    } catch (error) {
+      console.error(getMessage('auth', 'EMAIL_DELIVERY_FAILED'), error);
+    }
+    return { user_id: user.id };
+  }
+
+  async emailVerification(@Body() dto: EmailVerificationDTO) {
+    await this.emailVerificationService.sendVerificationEmail(dto.email);
+  }
+
+  async emailVerificationConfirm(@Body() dto: EmailVerificationConfirmDTO) {
+    await this.emailVerificationService.verifyToken(dto);
+  }
+
+  async delete(req: DeletePayloadDTO) {
+    const deleteUser = await this.userService.delete(req.id);
+    const isDeleted = deleteUser.affected === 1;
+
+    if (isDeleted) return { message: getMessage('auth', 'USER_DELETED') };
+
+    throw new HttpException(
+      {
+        error: {
+          message: getMessage('auth', 'DATA_CONFLICT'),
+          code: 'DATA_CONFLICT',
+        },
+      },
+      409,
+    );
+  }
+
+  async refresh(dto: RefreshPlayloadDTO) {
+    const claims = await this.readRefreshClaims(dto.refresh_token);
+    if (!claims) throw this.invalidRefreshToken();
+
+    const response = await this.entityManager.transaction(async (manager) => {
+      const session = await this.lockRefreshSession(manager, claims);
+      if (!session) return null;
+      const { token, family } = session;
+
+      if (
+        !(await this.passwordHasher.verify(dto.refresh_token, token.token_hash))
+      ) {
+        return null;
+      }
+
+      if (token.used_at) {
+        await manager.update(RefreshFamilies, family.id, {
+          revoked_at: new Date(),
+        });
+        return null;
+      }
+
+      if (token.revoked_at || token.expires_at.getTime() <= Date.now()) {
+        return null;
+      }
+
+      const next = await this.generateTokens(claims.sub);
+      await manager.update(RefreshTokens, token.id, { used_at: new Date() });
+      await manager.insert(RefreshTokens, {
+        users_id: { id: claims.sub },
+        family_id: family.id,
+        device_id: family.device_id,
+        jti: next.jti,
+        token_hash: next.token_hash,
+        expires_at: next.expires_at,
+        used_at: null,
+        revoked_at: null,
+      });
+      return next.response;
+    });
+
+    // Throw outside the transaction so reuse revocation is committed.
+    if (!response) throw this.invalidRefreshToken();
+    return response;
+  }
+
+  private async generateTokens(userId: string) {
+    const accessToken = await this.jwtService.signAsync({ sub: userId });
+
+    const refreshToken = await this.jwtService.signAsync(
+      { sub: userId, jti: randomUUID() },
+      this.refreshTokenConfig,
+    );
+
+    const access = this.jwtService.decode<JwtPayload>(accessToken);
+    const refresh = this.jwtService.decode<JwtPayload>(refreshToken);
+
+    if (!access.exp || !access.iat || !refresh.exp || !refresh.jti) {
+      throw new InternalServerErrorException('Token expiry is not configured');
+    }
+
+    return {
+      response: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: access.exp - access.iat,
+      },
+      token_hash: await this.passwordHasher.hash(refreshToken),
+      expires_at: new Date(refresh.exp * 1000),
+      jti: refresh.jti,
+    };
+  }
+
+  async me(userId: string) {
+    const user = await this.userService.findById(userId);
+    if (!user)
+      throw new UnauthorizedException({
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: getMessage('auth', 'INVALID_CREDENTIALS'),
+        },
+      });
+
+    return {
+      user_id: user.id,
+      email: user.email,
+      email_verified: Boolean(user.email_verified_at),
+      has_password: Boolean(user.password_hash),
+      linked_providers: [],
+    };
+  }
+
+  async logout(raw: string) {
+    const claims = await this.readRefreshClaims(raw);
+    if (!claims) return;
+
+    await this.entityManager.transaction(async (manager) => {
+      const session = await this.lockRefreshSession(manager, claims);
+      if (!session) return;
+
+      if (!(await this.passwordHasher.verify(raw, session.token.token_hash))) {
+        return;
+      }
+
+      await manager.update(RefreshFamilies, session.family.id, {
+        revoked_at: new Date(),
+      });
+    });
+  }
+
+  private async readRefreshClaims(raw: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(raw, {
+        secret: this.refreshTokenConfig.secret,
+      });
+
+      if (
+        typeof payload.sub !== 'string' ||
+        !isUUID(payload.sub) ||
+        typeof payload.jti !== 'string' ||
+        !isUUID(payload.jti) ||
+        typeof payload.exp !== 'number'
+      ) {
+        return null;
+      }
+
+      return { sub: payload.sub, jti: payload.jti };
+    } catch {
+      return null;
+    }
+  }
+
+  private invalidRefreshToken() {
+    return new UnauthorizedException({
+      error: {
+        code: 'INVALID_REFRESH_TOKEN',
+        message: getMessage('auth', 'INVALID_REFRESH_TOKEN'),
+      },
+    });
+  }
+
+  private async lockRefreshSession(
+    manager: EntityManager,
+    claims: { sub: string; jti: string },
+  ) {
+    const existing = await manager.findOne(RefreshTokens, {
+      where: { jti: claims.jti },
+    });
+
+    if (!existing) return null;
+
+    const family = await manager.findOne(RefreshFamilies, {
+      where: {
+        id: existing.family_id,
+        user_id: claims.sub,
+      },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!family || family.revoked_at) return null;
+
+    const token = await manager.findOne(RefreshTokens, {
+      where: { id: existing.id },
+    });
+
+    return token ? { token, family } : null;
   }
 }

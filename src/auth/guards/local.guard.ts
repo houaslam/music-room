@@ -8,7 +8,6 @@ export class LocalGuard extends AuthGuard('local') {
     context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean>{
     const request = context.switchToHttp().getRequest()
-    console.log("REQUEST == ", request.headers)
     return super.canActivate(context)
   }
 

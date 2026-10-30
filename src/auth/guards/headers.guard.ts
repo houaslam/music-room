@@ -4,8 +4,6 @@ import {
   ExecutionContext,
   Injectable,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { Observable } from 'rxjs';
 import { DeviceHeadersDto } from '../dto/headers-validation.dto.js';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -27,11 +25,14 @@ export class HeadersGuard implements CanActivate {
         Object.values(err.constraints || {}),
       );
       throw new BadRequestException({
-        code: "MISSING_CLIENT_HEADERS",
-        message: 'Header validation failed',
-        errors: errorMessages,
+        error: {
+          code: 'MISSING_CLIENT_HEADERS',
+          message: 'Header validation failed',
+          errors: errorMessages,
+        },
       });
     }
+    request.device = dtoInstance;
     return true;
   }
 }
