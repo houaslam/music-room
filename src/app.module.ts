@@ -10,6 +10,8 @@ import { UserModule } from './user/user.module.js';
 import { Users } from './user/entity/user.entity.js';
 import { ProfileModule } from './profile/profile.module.js';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { EmailModule } from './email/email.module.js';
+import { EmailTokens } from './email/entity/email.entity.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -25,7 +27,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_DATABASE'),
-        entities: [Users],
+        entities: [Users, EmailTokens],
         synchronize: true,
       }),
       inject: [ConfigService],
@@ -41,7 +43,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     AuthModule,
     UserModule,
     ProfileModule,
-    ThrottlerModule.forRoot()
+    ThrottlerModule.forRoot(),
+    EmailModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,23 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { AuthPayloadDTO } from './dto/auth.dto.js';
 import { JwtService } from '@nestjs/jwt';
+import { AuthPayloadDTO } from './dto/auth.dto.js';
+import { UserService } from '../user/user.service.js';
+import * as bcrypt from "bcrypt"
 
-const fakeUsers = [
-  {
-    id: 1,
-    username: 'hajar',
-    password: 'hehehe',
-  },
-];
 
 @Injectable()
 export class AuthService {
-  constructor(private jwtService: JwtService) {}
-  validateUser({ username, password }: AuthPayloadDTO) {
-    const findUser = fakeUsers.find((user) => user.username === username);
+  constructor(private jwtService: JwtService, private userService: UserService) {}
+  async validateUser({ username, password }: AuthPayloadDTO) {
+    const findUser = await this.userService.read({email:username});
     if (!findUser) return null;
-    if (findUser.password === password) {
-      const { password, ...user } = findUser;
+    if (!bcrypt.compare(password, findUser.password_hash)) {
+      const { password_hash, ...user } = findUser;
       return this.jwtService.sign(user);
     }
   }

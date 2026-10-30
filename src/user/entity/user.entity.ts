@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  IsNull,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -12,10 +13,10 @@ export class Users {
   id: string;
 
   @Column({ type: 'citext', unique: true, nullable: true })
-  email: string;
+  email: string | null;
 
   @Column({ type: 'text', nullable: true })
-  display_name: string;
+  display_name: string | null;
 
   @Column()
   password_hash: string;

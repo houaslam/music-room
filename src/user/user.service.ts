@@ -1,10 +1,11 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Users } from './entity/user.entity.js';
-import { DeleteResult, Repository } from 'typeorm';
+import { DeleteResult, Repository, UpdateResult } from 'typeorm';
 import { CreateUserDTO } from './dto/create-user.dto.js';
 import { DeleteUserDTO } from './dto/delete-user.dto.js';
 import { ReadUserDTO } from './dto/read-user.dto.js';
+import { UpdateUserDTO } from './dto/update-user.dto.js';
 
 @Injectable()
 export class UserService {
@@ -39,5 +40,9 @@ export class UserService {
         email: readUserDTO.email,
       },
     });
+  }
+
+  async update(dto: UpdateUserDTO): Promise<UpdateResult> {
+    return await this.userRepository.update(dto.id, dto.changes);
   }
 }
