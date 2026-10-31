@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { FindOperator } from 'typeorm';
 import { AuthController } from '../../src/auth/auth.controller.js';
 import { AuthService } from '../../src/auth/auth.service.js';
 import { JWTStrategy } from '../../src/auth/strategies/jwt.strategy.js';
@@ -115,7 +116,12 @@ describe('Day 2 logout-all session acceptance', () => {
     const matches = (row: Row, criteria: string | Row) =>
       typeof criteria === 'string'
         ? row.id === criteria
-        : Object.entries(criteria).every(([key, value]) => row[key] === value);
+        : Object.entries(criteria).every(([key, value]) =>
+            // IsNull() comes in as a FindOperator, the rest are plain values
+            value instanceof FindOperator && value.type === 'isNull'
+              ? row[key] === null || row[key] === undefined
+              : row[key] === value,
+          );
     const manager = {
       save: vi.fn(async (entity, value) => {
         const row = { id: randomUUID(), ...value };
@@ -224,6 +230,15 @@ describe('Day 2 logout-all session acceptance', () => {
   it('succeeds repeatedly when the account has no active families', async () => {
     await expect(service.logoutAll(owner)).resolves.toBeUndefined();
     await expect(service.logoutAll(owner)).resolves.toBeUndefined();
+  });
+  it('keeps the original revoked_at of a family that was already logged out', async () => {
+    const old = await login(service);
+    await service.logout(old.refresh_token);
+    const loggedOutAt = families[0].revoked_at;
+    await login(service);
+    await service.logoutAll(owner);
+    expect(families[0].revoked_at).toBe(loggedOutAt);
+    expect(families[1].revoked_at).toBeInstanceOf(Date);
   });
   it('keeps an issued access JWT valid while blocking the old refresh token', async () => {
     const session = await login(service);

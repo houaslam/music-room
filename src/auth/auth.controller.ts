@@ -8,7 +8,6 @@ import {
   Post,
   Req,
   UseGuards,
-  Headers,
 } from '@nestjs/common';
 import { RegisterPayloadDTO } from './dto/register.dto.js';
 import { HeadersGuard } from './guards/headers.guard.js';
@@ -24,7 +23,6 @@ import { JWTGuard } from './guards/jwt.guard.js';
 import { LogOutPayloadDTO } from './dto/log-out.dto.js';
 import { PasswordResetPayloadDTO } from './dto/password-reset.dto.js';
 import { PasswordResetConfirmPayloadDTO } from './dto/password-reset-confirm.dto.js';
-import type { JwtPayload } from 'jsonwebtoken';
 
 @UseGuards(HeadersGuard)
 @UseGuards(RateLimitGuard)
@@ -64,10 +62,7 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JWTGuard)
   @Post('logout-all')
-  async logoutAll(
-    @Req() req: { user: string },
-    @Headers() headers: DeviceHeadersDto,
-  ) {
+  async logoutAll(@Req() req: { user: string }) {
     await this.authService.logoutAll(req.user);
   }
 

@@ -5,9 +5,10 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Client } from 'pg';
-import { DataSource } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from '../dist/auth/auth.service.js';
+import { RefreshTokenService } from '../dist/auth/refresh-tokens.service.js';
 import { Users } from '../dist/user/entities/user.entity.js';
 import { RefreshTokens } from '../dist/auth/entities/refresh-tokens.entity.js';
 import { RefreshFamilies } from '../dist/auth/entities/refresh-families.entity.js';
@@ -101,7 +102,16 @@ try {
     password_hash: 'password-hash',
     email_verified_at: new Date(),
   });
-  const service = new AuthService(jwt, config, {}, source.manager, hasher, {});
+  const refreshTokens = new RefreshTokenService(hasher, {}, jwt, config);
+  const service = new AuthService(
+    jwt,
+    config,
+    {},
+    refreshTokens,
+    source.manager,
+    hasher,
+    {},
+  );
   const login = (deviceId = device.deviceId) =>
     service.login({ id: user.id }, { ...device, deviceId });
   const payload = (raw) => jwt.verifyAsync(raw, config);
@@ -198,12 +208,50 @@ try {
   await service.refresh({ refresh_token: rollback.refresh_token });
   passed++;
 
+  // logout-all revokes every live family, one already logged out keeps its time
+  const loggedOut = await login();
+  await service.logout(loggedOut.refresh_token);
+  const loggedOutAt = (await familyRow(loggedOut.refresh_token)).revoked_at;
+  const otherDevice = await login(randomUUID());
+  await service.logoutAll(user.id);
+  await rejects(service.refresh({ refresh_token: otherDevice.refresh_token }));
+  assert.deepEqual(
+    (await familyRow(loggedOut.refresh_token)).revoked_at,
+    loggedOutAt,
+  );
+  assert.equal(
+    await source.manager.countBy(RefreshFamilies, {
+      user_id: user.id,
+      revoked_at: IsNull(),
+    }),
+    0,
+  );
+  passed++;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const racing = await login();
+    const outcomes = await Promise.allSettled([
+      service.refresh({ refresh_token: racing.refresh_token }),
+      service.logoutAll(user.id),
+    ]);
+    assert.equal(outcomes[1].status, 'fulfilled');
+    assert.ok((await familyRow(racing.refresh_token)).revoked_at);
+    if (outcomes[0].status === 'fulfilled') {
+      await rejects(
+        service.refresh({ refresh_token: outcomes[0].value.refresh_token }),
+      );
+    }
+  }
+  const afterLogoutAll = await login();
+  await service.refresh({ refresh_token: afterLogoutAll.refresh_token });
+  passed++;
+
   await source.manager.delete(Users, user.id);
   assert.equal(await source.manager.count(RefreshFamilies), 0);
   assert.equal(await source.manager.count(RefreshTokens), 0);
   passed++;
   console.log(
-    `${passed} PostgreSQL scenarios passed (migration, devices, rotation/reuse, logout, concurrency, rollback, cascade).`,
+    `${passed} PostgreSQL scenarios passed (migration, devices, rotation/reuse, logout, concurrency, rollback, logout-all, cascade).`,
   );
 } finally {
   if (source?.isInitialized) await source.destroy();

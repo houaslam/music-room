@@ -2,7 +2,6 @@ import { getMessage } from '../messages.js';
 import {
   Body,
   ConflictException,
-  ForbiddenException,
   HttpException,
   Inject,
   Injectable,
@@ -27,10 +26,8 @@ import { EmailVerificationService } from '../email/email-verification.service.js
 import { RefreshPlayloadDTO } from './dto/refresh.dto.js';
 import { RefreshTokens } from './entities/refresh-tokens.entity.js';
 import { randomUUID } from 'node:crypto';
-import type { JwtPayload } from 'jsonwebtoken';
 import { DeviceHeadersDto } from './dto/headers-validation.dto.js';
 import { RefreshFamilies } from './entities/refresh-families.entity.js';
-import { isUUID } from 'class-validator';
 import { RefreshTokenService } from './refresh-tokens.service.js';
 
 @Injectable()
@@ -321,9 +318,10 @@ export class AuthService {
     await this.entityManager.transaction(async (manager) => {
       await this.lockAllRefreshSession(manager, userId);
 
+      // only the live ones, a family already logged out keeps its revoked_at
       await manager.update(
         RefreshFamilies,
-        { user_id: userId },
+        { user_id: userId, revoked_at: IsNull() },
         {
           revoked_at: new Date(),
         },
@@ -359,9 +357,10 @@ export class AuthService {
   }
 
   private async lockAllRefreshSession(manager: EntityManager, userId: string) {
-    const families = await manager.find(RefreshFamilies, {
+    await manager.find(RefreshFamilies, {
       where: {
         user_id: userId,
+        revoked_at: IsNull(),
       },
       order: { id: 'ASC' },
       lock: { mode: 'pessimistic_write' },
