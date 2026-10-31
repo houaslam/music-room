@@ -4,10 +4,12 @@ import { register } from '../api/auth';
 import { ApiError } from '../api/client';
 
 type Props = {
-  onRegistered: (userId: string) => void;
+  // gets the email so the next screen knows where the code was sent
+  onRegistered: (email: string) => void;
+  onLogin: () => void;
 };
 
-export default function RegisterScreen({ onRegistered }: Props) {
+export default function RegisterScreen({ onRegistered, onLogin }: Props) {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
@@ -18,12 +20,12 @@ export default function RegisterScreen({ onRegistered }: Props) {
     setError('');
     setLoading(true);
     try {
-      const { user_id } = await register({
+      await register({
         email,
         password,
         display_name: displayName,
       });
-      onRegistered(user_id);
+      onRegistered(email);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -67,6 +69,7 @@ export default function RegisterScreen({ onRegistered }: Props) {
         onPress={handleSubmit}
         disabled={loading}
       />
+      <Button title="I already have an account" onPress={onLogin} />
     </View>
   );
 }

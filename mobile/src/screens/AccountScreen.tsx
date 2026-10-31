@@ -1,57 +1,119 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, View } from 'react-native';
-import { deleteAccount } from '../api/auth';
+import { deleteAccount, logoutAll, me, type Me } from '../api/auth';
 import { ApiError } from '../api/client';
+import { clearSession, logOut, withAccessToken } from '../session';
 
 type Props = {
-  userId: string;
-  onDeleted: () => void;
+  onLoggedOut: () => void;
 };
 
-export default function AccountScreen({ userId, onDeleted }: Props) {
+type Action = 'logout' | 'logout-all' | 'delete';
+
+export default function AccountScreen({ onLoggedOut }: Props) {
+  const [account, setAccount] = useState<Me | null>(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState<Action | null>(null);
+
+  // the refresh token was refused (expired, revoked from another phone...),
+  // nothing to do here anymore but log in again
+  function handleError(err: unknown) {
+    if (err instanceof ApiError && err.code === 'SESSION_EXPIRED') {
+      onLoggedOut();
+      return;
+    }
+    setError(
+      err instanceof ApiError
+        ? err.message
+        : 'Something went wrong, try again.',
+    );
+  }
+
+  async function loadAccount() {
+    setError('');
+    try {
+      setAccount(await withAccessToken(me));
+    } catch (err) {
+      handleError(err);
+    }
+  }
+
+  // once, when the screen opens
+  useEffect(() => {
+    loadAccount();
+  }, []);
+
+  async function run(action: Action, work: () => Promise<void>) {
+    setError('');
+    setBusy(action);
+    try {
+      await work();
+      onLoggedOut();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function handleLogout() {
+    run('logout', logOut);
+  }
+
+  // if this fails the other phones are still logged in, so this one stays
+  // logged in too and the user can try again
+  function handleLogoutAll() {
+    run('logout-all', async () => {
+      await withAccessToken(logoutAll);
+      await clearSession();
+    });
+  }
 
   function confirmDelete() {
     Alert.alert('Delete account', "This can't be undone.", [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: handleDelete },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          run('delete', async () => {
+            await withAccessToken(deleteAccount);
+            await clearSession();
+          }),
+      },
     ]);
-  }
-
-  async function handleDelete() {
-    setError('');
-    setLoading(true);
-    try {
-      await deleteAccount(userId);
-      onDeleted();
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : 'Something went wrong, try again.',
-      );
-    } finally {
-      setLoading(false);
-    }
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Account created</Text>
+      <Text style={styles.title}>Your account</Text>
 
-      <Text style={styles.label}>Your user id</Text>
-      <Text style={styles.userId} selectable>
-        {userId}
-      </Text>
+      {account ? (
+        <Text style={styles.email}>{account.email}</Text>
+      ) : error ? null : (
+        <Text style={styles.label}>Loading...</Text>
+      )}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error && !account ? (
+        <Button title="Try again" onPress={loadAccount} />
+      ) : null}
 
       <Button
-        title={loading ? 'Deleting...' : 'Delete account'}
+        title={busy === 'logout' ? 'Logging out...' : 'Log out'}
+        onPress={handleLogout}
+        disabled={busy !== null}
+      />
+      <Button
+        title={busy === 'logout-all' ? 'Logging out...' : 'Log out everywhere'}
+        onPress={handleLogoutAll}
+        disabled={busy !== null}
+      />
+      <Button
+        title={busy === 'delete' ? 'Deleting...' : 'Delete account'}
         color="#d32f2f"
         onPress={confirmDelete}
-        disabled={loading}
+        disabled={busy !== null}
       />
     </View>
   );
@@ -72,7 +134,7 @@ const styles = StyleSheet.create({
   label: {
     color: '#666',
   },
-  userId: {
+  email: {
     marginBottom: 12,
   },
   error: {

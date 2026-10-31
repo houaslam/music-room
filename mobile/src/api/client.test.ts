@@ -83,6 +83,27 @@ describe('request', () => {
 
     expect(data).toBeNull();
   });
+
+  it('adds the access token as a bearer header when given one', async () => {
+    fetchMock.mockResolvedValue(fakeResponse(200, {}));
+
+    await request('/auth/me', { method: 'GET', token: 'access-1' });
+
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+      Authorization: 'Bearer access-1',
+      'X-Device-Id': '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    });
+  });
+
+  it('sends no Authorization header without a token', async () => {
+    fetchMock.mockResolvedValue(fakeResponse(201, {}));
+
+    await request('/auth/register', { method: 'POST', body: {} });
+
+    expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty(
+      'Authorization',
+    );
+  });
 });
 
 describe('request errors', () => {
@@ -129,6 +150,35 @@ describe('request errors', () => {
           'password must be longer than or equal to 8 characters',
         ],
         error: 'Bad Request',
+      }),
+    );
+
+    const err = await requestError();
+
+    expect(err).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_ERROR',
+      message:
+        'email must be an email\npassword must be longer than or equal to 8 characters',
+    });
+  });
+
+  it('shows every field message from the VALIDATION_ERROR details', async () => {
+    fetchMock.mockResolvedValue(
+      fakeResponse(400, {
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Request validation failed',
+          details: [
+            { fields: 'email', message: ['email must be an email'] },
+            {
+              fields: 'password',
+              message: [
+                'password must be longer than or equal to 8 characters',
+              ],
+            },
+          ],
+        },
       }),
     );
 
