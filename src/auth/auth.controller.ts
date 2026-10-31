@@ -59,6 +59,13 @@ export class AuthController {
     await this.authService.logout(dto.refresh_token);
   }
 
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JWTGuard)
+  @Post('logout-all')
+  async logoutAll(@Req() req: { user: string }) {
+    await this.authService.logoutAll(req.user);
+  }
+
   @UseGuards(JWTGuard)
   @Delete('delete')
   async delete(@Req() req: { user: string }) {

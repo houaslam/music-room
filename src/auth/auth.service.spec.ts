@@ -1,6 +1,7 @@
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import { AuthService } from './auth.service.js';
+import { RefreshTokenService } from './refresh-tokens.service.js';
 import { RefreshTokens } from './entities/refresh-tokens.entity.js';
 import { RefreshFamilies } from './entities/refresh-families.entity.js';
 
@@ -61,15 +62,23 @@ describe('AuthService session families', () => {
         }
       },
     };
+    const passwordHasher = {
+      hash: vi.fn(async (raw: string) => `hash:${raw}`),
+      verify: vi.fn(async (raw: string, hash: string) => hash === `hash:${raw}`),
+    };
+    const refreshTokenService = new RefreshTokenService(
+      passwordHasher as never,
+      {} as never,
+      jwt,
+      config,
+    );
     service = new AuthService(
       jwt,
       config,
       {} as never,
+      refreshTokenService,
       entityManager as never,
-      {
-        hash: vi.fn(async (raw) => `hash:${raw}`),
-        verify: vi.fn(async (raw, hash) => hash === `hash:${raw}`),
-      } as never,
+      passwordHasher as never,
       {} as never,
     );
   });
