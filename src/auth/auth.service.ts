@@ -3,12 +3,11 @@ import {
   Body,
   ConflictException,
   HttpException,
-  Inject,
   Injectable,
   InternalServerErrorException,
   UnauthorizedException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service.js';
 import { PasswordHasher } from '@nestjs/authentication';
 import { RegisterPayloadDTO } from './dto/register.dto.js';
@@ -16,8 +15,6 @@ import { EmailVerificationDTO } from './dto/email-verification.dto.js';
 import { EmailVerificationConfirmDTO } from './dto/email-verification-confirm.dto.js';
 import { DeletePayloadDTO } from './dto/delete.dto.js';
 import { LoginPaylodDTO } from './dto/login.dto.js';
-import refreshJwtConfig from './config/refresh-jwt.config.js';
-import type { ConfigType } from '@nestjs/config';
 import { EntityManager, IsNull } from 'typeorm';
 import { InjectEntityManager } from '@nestjs/typeorm';
 import { Users } from '../user/entities/user.entity.js';
@@ -29,14 +26,12 @@ import { randomUUID } from 'node:crypto';
 import { DeviceHeadersDto } from './dto/headers-validation.dto.js';
 import { RefreshFamilies } from './entities/refresh-families.entity.js';
 import { RefreshTokenService } from './refresh-tokens.service.js';
+import { GoogleAccounts } from './entities/google-accounts.entity.js';
 
 @Injectable()
 export class AuthService {
   private dummy_password_hash: Promise<string>;
   constructor(
-    private jwtService: JwtService,
-    @Inject(refreshJwtConfig.KEY)
-    private refreshTokenConfig: ConfigType<typeof refreshJwtConfig>,
     private userService: UserService,
     private refreshTokenService: RefreshTokenService,
     @InjectEntityManager()
@@ -50,7 +45,7 @@ export class AuthService {
 
   async validateUser({ email, password }: LoginPaylodDTO) {
     const user = await this.userService.read({ email });
-    if (!user) {
+    if (!user || !user.password_hash) {
       await this.passwordHasher.verify(
         password,
         await this.dummy_password_hash,
@@ -133,19 +128,21 @@ export class AuthService {
     });
   }
 
-  async login(user: { id: string }, headers: DeviceHeadersDto) {
+  async login(user: { id: string }, headers: DeviceHeadersDto | null) {
     const tokens = await this.refreshTokenService.generateTokens(user.id);
+    let deviceId: any = null;
+    if (headers) deviceId = headers.deviceId;
 
     await this.entityManager.transaction(async (manager) => {
       const family = await manager.save(RefreshFamilies, {
         user_id: user.id,
-        device_id: headers.deviceId,
+        device_id: deviceId,
         revoked_at: null,
       });
       await manager.insert(RefreshTokens, {
         users_id: { id: user.id },
         family_id: family.id,
-        device_id: headers.deviceId,
+        device_id: deviceId,
         jti: tokens.jti,
         token_hash: tokens.token_hash,
         expires_at: tokens.expires_at,
@@ -287,12 +284,15 @@ export class AuthService {
         },
       });
 
+    const googleAccount = await this.entityManager.findOne(GoogleAccounts, {
+      where: { users_id: { id: userId } },
+    });
     return {
       user_id: user.id,
       email: user.email,
       email_verified: Boolean(user.email_verified_at),
       has_password: Boolean(user.password_hash),
-      linked_providers: [],
+      linked_providers: googleAccount ? ['google'] : [],
     };
   }
 
@@ -364,6 +364,62 @@ export class AuthService {
       },
       order: { id: 'ASC' },
       lock: { mode: 'pessimistic_write' },
+    });
+  }
+
+  async oauth(req: { user: any }) {
+    const user = req.user;
+    if (!user || typeof user.id !== 'string' || !user.id.trim() || user.email_verified !== true)
+      throw new UnauthorizedException({
+        error: {
+          code: 'OAUTH_INVALID',
+          message: getMessage('auth', 'OAUTH_INVALID'),
+        },
+      });
+
+    if (typeof user.email !== 'string' || !user.email.trim()) {
+      throw new UnprocessableEntityException({
+        error: { code: 'OAUTH_EMAIL_MISSING', message: getMessage('auth', 'OAUTH_EMAIL_MISSING') },
+      });
+    }
+
+    return this.entityManager.transaction(async (manager) => {
+      const existingGoogleAccount = await manager.findOne(GoogleAccounts, {
+        where: { google_user_id: user.id },
+        relations: {users_id: true}
+      });
+
+      if (existingGoogleAccount) {
+        return { id: existingGoogleAccount.users_id.id, is_new_user: false };
+      }
+
+      const email = user.email.trim().toLowerCase();
+      const existingUser = await manager.findOne(Users, { where: { email } });
+      if (existingUser) {
+        throw new ConflictException({
+          error: { code: 'LINK_REQUIRED', message: getMessage('auth', 'LINK_REQUIRED') },
+        });
+      }
+
+      const createdUser = await manager.save(Users, {
+        email,
+        display_name: user.name,
+        password_hash: null,
+        email_verified_at: new Date(),
+      });
+
+      await manager.save(GoogleAccounts, {
+        users_id: { id: createdUser.id },
+        google_user_id: user.id,
+      });
+
+      await manager.save(Profiles, {
+        user_id: createdUser.id,
+        display_name: createdUser.display_name,
+        avatar_url: user.photo,
+      });
+
+      return { id: createdUser.id, is_new_user: true };
     });
   }
 }

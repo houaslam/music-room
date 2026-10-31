@@ -13,6 +13,7 @@ import { EmailTokens } from './email/entities/email.entity.js';
 import { Profiles } from './profile/entities/profiles.entity.js';
 import { RefreshTokens } from './auth/entities/refresh-tokens.entity.js';
 import { RefreshFamilies } from './auth/entities/refresh-families.entity.js';
+import { GoogleAccounts } from './auth/entities/google-accounts.entity.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { RefreshFamilies } from './auth/entities/refresh-families.entity.js';
           Profiles,
           RefreshTokens,
           RefreshFamilies,
+          GoogleAccounts
         ],
         synchronize: true,
       }),

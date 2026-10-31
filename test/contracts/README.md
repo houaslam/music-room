@@ -53,3 +53,63 @@ history, reuse revocation, logout with rotated tokens, simultaneous refreshes,
 refresh versus logout, concurrent new login, transaction rollback, and user-delete
 cascades using real PostgreSQL. Password hashing is stubbed in this database suite;
 the separate password hashing unit tests exercise the actual implementation.
+
+## Day 3: Google OAuth acceptance (October 31, 2026)
+
+Run only the new OAuth checks:
+
+```sh
+npm run test:auth-contract -- oauth
+```
+
+There are **44 cases**: 19 Google strategy/profile/state cases, 18 account and
+session cases, 4 callback HTTP cases, and 3 browser-cookie state cases. They are active acceptance tests; none
+are skipped. The default `npm test` command does not include contract files.
+
+The checks follow the Google authorization-code/Passport flow currently being
+implemented in this repository. Facebook is not required for this milestone.
+The subject requires social authentication; the precise fields and error codes
+below are the project's implementation contract, not quotations from the subject.
+
+Implementation contract:
+
+- Google strategy produces a trusted principal with `id` (stable Google subject),
+  `email`, `email_verified: true`,
+  and optional display information. Google credentials stay out of this principal.
+- Missing identity or unverified email: 401 `OAUTH_INVALID`. Missing email:
+  422 `OAUTH_EMAIL_MISSING`. Missing photos or structured names must not crash login.
+- Authorization generates a different state for each attempt. Missing or mismatched
+  state is rejected before code exchange. A valid state can be consumed only once.
+- `AuthService.oauth(req)` receives the trusted `req.user` and validated
+  identity only; it never takes an account identity from the request body.
+  The browser callback has no device headers and creates sessions with a null device ID.
+- New accounts persist a null password, verified email, profile and provider
+  identity in `google_accounts`. Identity fields are `google_user_id` and the
+  `users_id` relation mapped to SQL `user_id`.
+  User/profile/identity creation must roll back together on failure.
+- Returning users are identified by provider subject, including when their Google
+  email changes. Matching email alone cannot link accounts: return 409
+  `LINK_REQUIRED` and require the authenticated Day 4 linking flow.
+- Successful sign-in returns `access_token`, `refresh_token`, `expires_in`,
+  and `is_new_user`
+  via the controller after `oauth()` returns the committed local user ID. Tokens
+  use the existing refresh-family system, including rotation and logout-all.
+  Session writes roll back on failure; account creation commits separately.
+- `/me` reports `has_password: false` and `linked_providers: ['google']` for a
+  Google-only account. The callback returns the login response and propagates
+  service errors; both Google routes retain the Passport guard.
+
+Test boundaries:
+
+- Provider tests use the real strategy and Passport state machinery, replacing
+  the token exchange at the network boundary. They never contact Google.
+- Account tests use the real AuthService, RefreshTokenService and signed JWTs,
+  with a transactional in-memory persistence adapter and a fake password hasher.
+  Extend that adapter if repository APIs change; preserve the behavior assertions.
+- HTTP tests use the real OAuthController, override the provider guard to inject
+  a trusted identity or reject it, mock AuthService, and bypass rate limiting.
+  Browser-cookie tests separately exercise the actual OAuth session middleware
+  and Passport strategy, stopping at the code-exchange network boundary.
+- Real Google consent/code exchange, client credentials, deployed callback/device
+  context, and PostgreSQL migrations/unique constraints/concurrent first sign-ins
+  still require integration verification. Day 4 link/unlink is a separate milestone.

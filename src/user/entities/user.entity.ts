@@ -19,8 +19,8 @@ export class Users {
   @Column({ type: 'text', nullable: true })
   display_name: string | null;
 
-  @Column()
-  password_hash: string;
+  @Column({type: "text", nullable: true})
+  password_hash: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   email_verified_at: Date | null;

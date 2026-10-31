@@ -11,7 +11,10 @@ export const MESSAGES = {
     USER_DELETED: 'User Deleted Successfully',
     DATA_CONFLICT: 'User Deletion was unsuccessfull',
     EMAIL_DELIVERY_FAILED: 'Error while sending the email: ',
-    INVALID_REFRESH_TOKEN: "Refresh token is invalid"
+    INVALID_REFRESH_TOKEN: "Refresh token is invalid",
+    OAUTH_INVALID: "Invalid OAuth",
+    OAUTH_EMAIL_MISSING: 'Google did not provide an email address',
+    LINK_REQUIRED: 'Sign in to your existing account to link Google',
   },
   user: {
     EMAIL_TAKEN: 'Email is already taken!',

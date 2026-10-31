@@ -38,8 +38,6 @@ describe('AuthService credential validation', () => {
       }),
     };
     service = new AuthService(
-      {} as never,
-      {} as never,
       Object.assign(new UserService({} as never), { read }),
       {} as never,
       {
@@ -64,6 +62,17 @@ describe('AuthService credential validation', () => {
       credentials.password,
       'dummy-password-hash',
     );
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects Google-only users without passing a null hash to the verifier', async () => {
+    user.password_hash = null;
+    verify.mockResolvedValue(true);
+    await expect(service.validateUser(credentials)).rejects.toMatchObject({
+      status: 401,
+      response: { error: { code: 'INVALID_CREDENTIALS' } },
+    });
+    expect(verify).toHaveBeenCalledExactlyOnceWith(credentials.password, 'dummy-password-hash');
     expect(manager.update).not.toHaveBeenCalled();
   });
 

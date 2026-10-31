@@ -31,6 +31,30 @@
 $ npm install
 ```
 
+## Google sign-in (local development)
+
+Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
+The old `GOOGLE_CLIENT_SECRECT` spelling is still accepted as a fallback.
+For the default local port, register this exact redirect URI in Google Console:
+`http://localhost:3000/api/v1/auth/oauth/google/callback`.
+
+Open `http://localhost:3000/api/v1/auth/oauth/google` in a browser. Both the
+start and callback routes use GET and do not require device headers. A successful
+callback returns the application's access and refresh tokens. An existing account
+with the same email but no matching Google identity returns 409 `LINK_REQUIRED`;
+it is never linked automatically.
+
+OAuth state uses a ten-minute, HTTP-only, SameSite=Lax session cookie. Set
+`OAUTH_SESSION_SECRET` to a stable random secret; otherwise the existing
+`ACCESS_TOKEN_SECRET` is used. Production cookies require HTTPS. If HTTPS ends at
+a trusted reverse proxy, configure Express proxy trust for that deployment.
+The default session store is in memory for single-process development: configure
+a shared persistent store in `src/auth/oauth-session.ts` before production or
+running multiple API instances. A restart invalidates pending OAuth attempts.
+
+Run `npm run test:auth-contract -- oauth` for the Google profile, callback,
+account/session and browser-cookie checks; no Google credentials are used.
+
 ## Compile and run the project
 
 ```bash

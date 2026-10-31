@@ -28,8 +28,8 @@ export class RefreshTokens {
   @JoinColumn({ name: 'family_id' })
   family: RefreshFamilies;
 
-  @Column('uuid')
-  device_id: string;
+  @Column('uuid', { nullable: true })
+  device_id: string | null;
 
   @Column({ type: 'uuid', unique: true })
   jti: string;

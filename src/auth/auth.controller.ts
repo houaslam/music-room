@@ -90,6 +90,7 @@ export class AuthController {
     await this.authService.emailVerificationConfirm(dto);
   }
 
+
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('password-reset')
   async passwordReset(@Body() dto: PasswordResetPayloadDTO) {}

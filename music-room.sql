@@ -21,16 +21,13 @@ CREATE TABLE users (
 CREATE TRIGGER users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TYPE oauth_provider AS ENUM ('google', 'facebook');
-
-CREATE TABLE oauth_accounts (
+CREATE TABLE google_accounts (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider         oauth_provider NOT NULL,
-    provider_user_id TEXT NOT NULL,
+    google_user_id   TEXT NOT NULL,
     linked_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (provider, provider_user_id),   -- one provider identity, one account
-    UNIQUE (user_id, provider)             -- cannot link the same provider twice
+    UNIQUE (google_user_id),              -- one Google identity, one account
+    UNIQUE (user_id)                      -- one Google identity per user
 );
 
 -- Verification and reset share one table: same shape, same lifecycle.

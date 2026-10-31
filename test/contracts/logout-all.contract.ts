@@ -170,8 +170,6 @@ describe('Day 2 logout-all session acceptance', () => {
       refreshConfig,
     );
     service = new AuthService(
-      jwt,
-      refreshConfig,
       {} as never,
       refreshService,
       em as never,

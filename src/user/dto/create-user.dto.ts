@@ -1,13 +1,18 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, max, MaxLength, maxLength, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateUserDTO {
   @IsEmail()
   @IsNotEmpty()
   email: string;
 
-  @IsNotEmpty()
-  password_hash: string;
+  @IsString()
+  password_hash: string | null;
 
   @IsNotEmpty()
   @IsString()
