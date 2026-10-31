@@ -2,7 +2,9 @@
 
 Expo (React Native + TypeScript) app for the Music Room API in the repo root.
 
-For now it covers what the backend has: register, and delete the account you just made.
+For now it covers what the backend has: register, verify the email with the 6 digit code,
+log in, see your account, log out (this phone or everywhere) and delete the account.
+You stay logged in after closing the app.
 
 ## Run it
 
@@ -32,8 +34,11 @@ so the backend doesn't need to be running.
 
 ## Where things are
 
-- `App.tsx` - shows the register screen, or the account screen once we have a user id
+- `App.tsx` - picks the screen: login, register, code, or account if a session was saved
 - `src/device.ts` - the 4 `X-*` headers the backend wants on every request
-- `src/api/client.ts` - `request()`: base url, headers, timeout, turns errors into `ApiError`
+- `src/api/client.ts` - `request()`: base url, headers, bearer token, timeout, turns errors into `ApiError`
 - `src/api/auth.ts` - one function per `/auth` route
+- `src/session.ts` - the tokens. refresh token in the keystore, access token in memory,
+  `withAccessToken()` gets a new one when it runs out. only one refresh at a time, the backend
+  logs the whole session out if the same refresh token comes back twice
 - `src/screens/` - the screens

@@ -20,15 +20,18 @@ export class ApiError extends Error {
 type RequestOptions = {
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
+  // access token for the routes behind login
+  token?: string;
 };
 
 // no automatic retry on purpose: if register reached the server but the answer
 // got lost, sending it again would come back as EMAIL_TAKEN. the user can tap again
 export async function request<T>(
   path: string,
-  { method, body }: RequestOptions,
+  { method, body, token }: RequestOptions,
 ): Promise<T> {
   const headers = await getDeviceHeaders();
+  if (token) headers.Authorization = `Bearer ${token}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -65,23 +68,31 @@ export async function request<T>(
   return data as T;
 }
 
-// the contract says errors look like { error: { code, message } }, but right now
-// nest sends { code, message } flat, and ValidationPipe sends
-// { message: string[], error: 'Bad Request' } with no code at all
+// the contract says errors look like { error: { code, message } }, but some
+// routes still send { code, message } flat, and ValidationPipe sends
+// { message: string[], error: 'Bad Request' } with no code at all.
+// VALIDATION_ERROR has a generic message, the useful part is in details
 type ErrorBody = {
   code?: string;
   message?: string | string[];
-  error?: string | { code?: string; message?: string };
+  details?: { fields?: string; message?: string[] }[];
+  error?: string | ErrorBody;
 };
 
 function toApiError(status: number, data: unknown): ApiError {
   const body = (data ?? {}) as ErrorBody;
-  const details = typeof body.error === 'object' ? body.error : body;
+  const error = typeof body.error === 'object' ? body.error : body;
 
-  const code = details.code ?? fallbackCode(status);
-  const message = Array.isArray(details.message)
-    ? details.message.join('\n')
-    : (details.message ?? 'Something went wrong on the server.');
+  const code = error.code ?? fallbackCode(status);
+
+  const fieldMessages = error.details?.flatMap((d) => d.message ?? []) ?? [];
+  if (fieldMessages.length) {
+    return new ApiError(status, code, fieldMessages.join('\n'));
+  }
+
+  const message = Array.isArray(error.message)
+    ? error.message.join('\n')
+    : (error.message ?? 'Something went wrong on the server.');
 
   return new ApiError(status, code, message);
 }
