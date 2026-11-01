@@ -44,6 +44,44 @@ it('registers and gives the email to the parent so it can ask for the code', asy
   );
 });
 
+it('checks the form before sending it', async () => {
+  const user = userEvent.setup();
+  await render(<RegisterScreen onRegistered={jest.fn()} onLogin={jest.fn()} />);
+
+  await user.type(screen.getByPlaceholderText('Email'), 'adam');
+  await user.type(screen.getByPlaceholderText('Display name'), 'adam');
+  await user.type(screen.getByPlaceholderText('Password'), 'password123');
+  await user.press(screen.getByRole('button', { name: 'Create account' }));
+
+  expect(
+    await screen.findByText("That email doesn't look right."),
+  ).toBeOnTheScreen();
+  expect(registerMock).not.toHaveBeenCalled();
+});
+
+it('removes the space the phone keyboard adds after the email', async () => {
+  registerMock.mockResolvedValue({ user_id: 'abc' });
+  const onRegistered = jest.fn();
+  const user = userEvent.setup();
+  await render(
+    <RegisterScreen onRegistered={onRegistered} onLogin={jest.fn()} />,
+  );
+
+  await user.type(screen.getByPlaceholderText('Email'), 'adam@test.com ');
+  await user.type(screen.getByPlaceholderText('Display name'), ' adam ');
+  await user.type(screen.getByPlaceholderText('Password'), 'password123');
+  await user.press(screen.getByRole('button', { name: 'Create account' }));
+
+  expect(registerMock).toHaveBeenCalledWith({
+    email: 'adam@test.com',
+    display_name: 'adam',
+    password: 'password123',
+  });
+  await waitFor(() =>
+    expect(onRegistered).toHaveBeenCalledWith('adam@test.com'),
+  );
+});
+
 it('goes to login', async () => {
   const onLogin = jest.fn();
   const user = userEvent.setup();

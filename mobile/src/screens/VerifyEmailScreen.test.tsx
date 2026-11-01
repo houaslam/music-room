@@ -69,10 +69,7 @@ it.each([
   expect(onVerified).not.toHaveBeenCalled();
 });
 
-it('shows the message from the server for other api errors', async () => {
-  confirmMock.mockRejectedValue(
-    new ApiError(400, 'VALIDATION_ERROR', 'token must be 6 digits'),
-  );
+it('checks the code is 6 digits before sending it', async () => {
   await render(
     <VerifyEmailScreen email="adam@test.com" onVerified={jest.fn()} />,
   );
@@ -80,7 +77,24 @@ it('shows the message from the server for other api errors', async () => {
   const user = await typeCode('12');
   await user.press(screen.getByRole('button', { name: 'Verify' }));
 
-  expect(await screen.findByText('token must be 6 digits')).toBeOnTheScreen();
+  expect(await screen.findByText('The code is 6 digits.')).toBeOnTheScreen();
+  expect(confirmMock).not.toHaveBeenCalled();
+});
+
+it('shows the message from the server for other api errors', async () => {
+  confirmMock.mockRejectedValue(
+    new ApiError(429, 'RATE_LIMITED', 'Too many requests, slow down'),
+  );
+  await render(
+    <VerifyEmailScreen email="adam@test.com" onVerified={jest.fn()} />,
+  );
+
+  const user = await typeCode();
+  await user.press(screen.getByRole('button', { name: 'Verify' }));
+
+  expect(
+    await screen.findByText('Too many requests, slow down'),
+  ).toBeOnTheScreen();
 });
 
 it('blocks a second tap while the code is being checked', async () => {

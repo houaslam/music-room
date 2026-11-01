@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import { confirmEmail, resendCode } from '../api/auth';
 import { ApiError } from '../api/client';
+import { checkCode } from '../forms';
 
 type Props = {
   email: string;
@@ -15,11 +16,19 @@ export default function VerifyEmailScreen({ email, onVerified }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function handleVerify() {
-    setError('');
     setInfo('');
+
+    const cleanCode = code.trim();
+    const codeError = checkCode(cleanCode);
+    if (codeError) {
+      setError(codeError);
+      return;
+    }
+
+    setError('');
     setLoading(true);
     try {
-      await confirmEmail(email, code);
+      await confirmEmail(email, cleanCode);
       onVerified();
     } catch (err) {
       setError(errorMessage(err));

@@ -41,4 +41,7 @@ so the backend doesn't need to be running.
 - `src/session.ts` - the tokens. refresh token in the keystore, access token in memory,
   `withAccessToken()` gets a new one when it runs out. only one refresh at a time, the backend
   logs the whole session out if the same refresh token comes back twice
+- `src/forms.ts` - checks the forms before sending them, with the same rules as the backend
+  (email, display name 50 max, password 8 to 128, code 6 digits). the backend still checks
+  everything, this is just so the user gets a clear message right away
 - `src/screens/` - the screens

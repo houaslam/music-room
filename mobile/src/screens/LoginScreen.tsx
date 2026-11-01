@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import { login } from '../api/auth';
 import { ApiError } from '../api/client';
+import { checkLoginForm } from '../forms';
 import { startSession } from '../session';
 
 type Props = {
@@ -24,15 +25,24 @@ export default function LoginScreen({
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
+    // the phone keyboard adds a space after an autocompleted email
+    const cleanEmail = email.trim();
+
+    const formError = checkLoginForm({ email: cleanEmail, password });
+    if (formError) {
+      setError(formError);
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
-      await startSession(await login(email, password));
+      await startSession(await login(cleanEmail, password));
       onLoggedIn();
     } catch (err) {
       // the backend only says this once the password is right
       if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
-        onNeedsVerification(email);
+        onNeedsVerification(cleanEmail);
         return;
       }
       setError(errorMessage(err));
