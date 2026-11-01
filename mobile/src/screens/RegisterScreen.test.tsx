@@ -24,10 +24,12 @@ async function fillForm() {
   return user;
 }
 
-it('registers and gives the new user id to the parent', async () => {
+it('registers and gives the email to the parent so it can ask for the code', async () => {
   registerMock.mockResolvedValue({ user_id: 'abc' });
   const onRegistered = jest.fn();
-  await render(<RegisterScreen onRegistered={onRegistered} />);
+  await render(
+    <RegisterScreen onRegistered={onRegistered} onLogin={jest.fn()} />,
+  );
 
   const user = await fillForm();
   await user.press(screen.getByRole('button', { name: 'Create account' }));
@@ -37,14 +39,28 @@ it('registers and gives the new user id to the parent', async () => {
     display_name: 'adam',
     password: 'password123',
   });
-  await waitFor(() => expect(onRegistered).toHaveBeenCalledWith('abc'));
+  await waitFor(() =>
+    expect(onRegistered).toHaveBeenCalledWith('adam@test.com'),
+  );
+});
+
+it('goes to login', async () => {
+  const onLogin = jest.fn();
+  const user = userEvent.setup();
+  await render(<RegisterScreen onRegistered={jest.fn()} onLogin={onLogin} />);
+
+  await user.press(
+    screen.getByRole('button', { name: 'I already have an account' }),
+  );
+
+  expect(onLogin).toHaveBeenCalled();
 });
 
 it('says so when the email already has an account', async () => {
   registerMock.mockRejectedValue(
     new ApiError(409, 'EMAIL_TAKEN', 'Email is already taken!'),
   );
-  await render(<RegisterScreen onRegistered={jest.fn()} />);
+  await render(<RegisterScreen onRegistered={jest.fn()} onLogin={jest.fn()} />);
 
   const user = await fillForm();
   await user.press(screen.getByRole('button', { name: 'Create account' }));
@@ -62,7 +78,7 @@ it('shows the message from the server for other api errors', async () => {
       'password must be longer than or equal to 8 characters',
     ),
   );
-  await render(<RegisterScreen onRegistered={jest.fn()} />);
+  await render(<RegisterScreen onRegistered={jest.fn()} onLogin={jest.fn()} />);
 
   const user = await fillForm();
   await user.press(screen.getByRole('button', { name: 'Create account' }));
@@ -76,7 +92,7 @@ it('shows the message from the server for other api errors', async () => {
 
 it('shows a generic message when something unexpected breaks', async () => {
   registerMock.mockRejectedValue(new Error('boom'));
-  await render(<RegisterScreen onRegistered={jest.fn()} />);
+  await render(<RegisterScreen onRegistered={jest.fn()} onLogin={jest.fn()} />);
 
   const user = await fillForm();
   await user.press(screen.getByRole('button', { name: 'Create account' }));
@@ -89,7 +105,7 @@ it('shows a generic message when something unexpected breaks', async () => {
 it('blocks a second tap while the first request is still running', async () => {
   // never resolves, so the screen stays in its loading state
   registerMock.mockReturnValue(new Promise(() => {}));
-  await render(<RegisterScreen onRegistered={jest.fn()} />);
+  await render(<RegisterScreen onRegistered={jest.fn()} onLogin={jest.fn()} />);
 
   const user = await fillForm();
   await user.press(screen.getByRole('button', { name: 'Create account' }));
@@ -106,7 +122,7 @@ it('clears the old error when trying again', async () => {
       new ApiError(409, 'EMAIL_TAKEN', 'Email is already taken!'),
     )
     .mockResolvedValueOnce({ user_id: 'abc' });
-  await render(<RegisterScreen onRegistered={jest.fn()} />);
+  await render(<RegisterScreen onRegistered={jest.fn()} onLogin={jest.fn()} />);
 
   const user = await fillForm();
   await user.press(screen.getByRole('button', { name: 'Create account' }));
