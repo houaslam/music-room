@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller.js';
+import { PasswordVerificationService } from './password-verification.service.js';
 import { AuthService } from './auth.service.js';
 import { HeadersGuard } from './guards/headers.guard.js';
 import { RateLimitGuard } from './guards/throttle.guard.js';
@@ -15,15 +16,25 @@ describe('AuthController', () => {
     logout: vi.fn(),
     emailVerification: vi.fn(),
     emailVerificationConfirm: vi.fn(),
+    changePassword: vi.fn(),
   };
+
+  const recovery = { request: vi.fn(), confirm: vi.fn() };
 
   beforeEach(async () => {
     vi.resetAllMocks();
     // Vitest does not emit constructor metadata like tsc. Supply just this DI hint.
-    Reflect.defineMetadata('design:paramtypes', [AuthService], AuthController);
+    Reflect.defineMetadata(
+      'design:paramtypes',
+      [AuthService, PasswordVerificationService],
+      AuthController,
+    );
     const module = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: service }],
+      providers: [
+        { provide: AuthService, useValue: service },
+        { provide: PasswordVerificationService, useValue: recovery },
+      ],
     })
       .overrideGuard(HeadersGuard)
       .useValue({ canActivate: () => true })

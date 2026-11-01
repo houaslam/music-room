@@ -1,6 +1,7 @@
 import { PasswordHashingModule } from '../security/password-hashing.module.js';
 import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller.js';
+import { PasswordVerificationService } from './password-verification.service.js';
 import { AuthService } from './auth.service.js';
 import { OAuthService } from './oauth.service.js';
 import { JwtModule } from '@nestjs/jwt';
@@ -37,6 +38,7 @@ import { GoogleAccounts } from './entities/google-accounts.entity.js';
   controllers: [AuthController, OAuthController],
   providers: [
     AuthService,
+    PasswordVerificationService,
     OAuthService,
     LocalStrategy,
     JWTStrategy,

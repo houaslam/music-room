@@ -21,6 +21,8 @@ import { RefreshPlayloadDTO } from './dto/refresh.dto.js';
 import { DeviceHeadersDto } from './dto/headers-validation.dto.js';
 import { JWTGuard } from './guards/jwt.guard.js';
 import { LogOutPayloadDTO } from './dto/log-out.dto.js';
+import { ChangePasswordPayloadDTO } from './dto/change-password.dto.js';
+import { PasswordVerificationService } from './password-verification.service.js';
 import { PasswordResetPayloadDTO } from './dto/password-reset.dto.js';
 import { PasswordResetConfirmPayloadDTO } from './dto/password-reset-confirm.dto.js';
 
@@ -28,7 +30,10 @@ import { PasswordResetConfirmPayloadDTO } from './dto/password-reset-confirm.dto
 @UseGuards(RateLimitGuard)
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private passwordVerificationService: PasswordVerificationService,
+  ) {}
 
   @Post('register')
   async register(@Body() dto: RegisterPayloadDTO) {
@@ -90,12 +95,15 @@ export class AuthController {
     await this.authService.emailVerificationConfirm(dto);
   }
 
-
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Post('password-reset')
-  async passwordReset(@Body() dto: PasswordResetPayloadDTO) {}
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Post('password-reset/request')
+  async passwordResetRequest(@Body() dto: PasswordResetPayloadDTO) {
+    await this.passwordVerificationService.request(dto.email);
+  }
 
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('password-reset/confirm')
-  async PasswordResetConfirm(@Body() dto: PasswordResetConfirmPayloadDTO) {}
+  async passwordResetConfirm(@Body() dto: PasswordResetConfirmPayloadDTO) {
+    await this.passwordVerificationService.confirm(dto);
+  }
 }
