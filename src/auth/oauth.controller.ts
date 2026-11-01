@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -25,6 +26,13 @@ export class OAuthController {
   @UseGuards(GoogleAuthGuard)
   @Get('google')
   async oauth(@Req() req: any) {}
+
+  @UseGuards(JWTGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete('google')
+  async unlink(@Req() req: any) {
+    await this.oauthService.unlink(req.user)
+  }
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/callback')

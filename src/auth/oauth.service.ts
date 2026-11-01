@@ -3,6 +3,7 @@ import {
   ConflictException,
   UnauthorizedException,
   UnprocessableEntityException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectEntityManager } from '@nestjs/typeorm';
 import { EntityManager, QueryFailedError } from 'typeorm';
@@ -198,5 +199,39 @@ export class OAuthService {
       }
       throw error;
     }
+  }
+
+  async unlink(appUserId: string) {
+    await this.entityManager.transaction(async (manager) => {
+      const user = await manager.findOne(Users, {
+        where: { id: appUserId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!user)
+        throw new UnauthorizedException({
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        message: getMessage('auth', 'INVALID_CREDENTIALS'),
+      },
+    });
+    const linkedAcc = await manager.findOne(GoogleAccounts, {
+      where: { users_id: { id: appUserId } },
+    });
+    if (!linkedAcc)
+      throw new NotFoundException({
+        error: {
+          code: 'NOT_LINKED',
+          message: getMessage('auth', 'NOT_LINKED'),
+        },
+      });
+      if (!user.password_hash)
+        throw new ConflictException({
+          error: {
+            code: 'LAST_LOGIN_METHOD',
+            message: getMessage('auth', 'LAST_LOGIN_METHOD'),
+          },
+        });
+      await manager.delete(GoogleAccounts, linkedAcc.id);
+    });
   }
 }
