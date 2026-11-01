@@ -15,6 +15,10 @@ export const MESSAGES = {
     OAUTH_INVALID: "Invalid OAuth",
     OAUTH_EMAIL_MISSING: 'Google did not provide an email address',
     LINK_REQUIRED: 'Sign in to your existing account to link Google',
+    PROVIDER_IDENTITY_IN_USE: 'This Google account is linked to another user',
+    PROVIDER_ALREADY_LINKED: 'Your account is already linked to Google',
+    NOT_LINKED: 'Your account is not linked to Google',
+    LAST_LOGIN_METHOD: 'Set a password before unlinking your only login method',
   },
   user: {
     EMAIL_TAKEN: 'Email is already taken!',

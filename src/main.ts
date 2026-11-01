@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ConfigService } from '@nestjs/config';
-import { createOAuthSession } from './auth/oauth-session.js';
+import { createOAuthSession } from './auth/session/oauth-session.js';
 import {
   BadRequestException,
   ValidationPipe,

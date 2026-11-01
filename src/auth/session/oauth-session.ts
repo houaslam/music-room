@@ -15,7 +15,8 @@ export function createOAuthSession(config: ConfigService) {
       sameSite: 'lax',
       secure: config.get<string>('NODE_ENV') === 'production',
       maxAge: 10 * 60 * 1000,
-      path: '/api/v1/auth/oauth',
+      path: '/api/v1/auth/oauth'
     },
+    
   });
 }
