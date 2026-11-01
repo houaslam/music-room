@@ -58,6 +58,35 @@ it('logs in, saves the session and tells the parent', async () => {
   expect(startSessionMock).toHaveBeenCalledWith(tokens);
 });
 
+it('asks for the password before sending anything', async () => {
+  const user = userEvent.setup();
+  await renderLogin();
+
+  await user.type(screen.getByPlaceholderText('Email'), 'adam@test.com');
+  await user.press(screen.getByRole('button', { name: 'Log in' }));
+
+  expect(await screen.findByText('Enter your password.')).toBeOnTheScreen();
+  expect(loginMock).not.toHaveBeenCalled();
+});
+
+it('removes the space the phone keyboard adds after the email', async () => {
+  loginMock.mockRejectedValue(
+    new ApiError(403, 'EMAIL_NOT_VERIFIED', 'Email not verified'),
+  );
+  const onNeedsVerification = jest.fn();
+  const user = userEvent.setup();
+  await renderLogin({ onNeedsVerification });
+
+  await user.type(screen.getByPlaceholderText('Email'), 'adam@test.com ');
+  await user.type(screen.getByPlaceholderText('Password'), 'password123');
+  await user.press(screen.getByRole('button', { name: 'Log in' }));
+
+  expect(loginMock).toHaveBeenCalledWith('adam@test.com', 'password123');
+  await waitFor(() =>
+    expect(onNeedsVerification).toHaveBeenCalledWith('adam@test.com'),
+  );
+});
+
 it('fills in the email it was given', async () => {
   await renderLogin({ email: 'adam@test.com' });
 

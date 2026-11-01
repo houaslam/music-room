@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import { register } from '../api/auth';
 import { ApiError } from '../api/client';
+import { checkRegisterForm } from '../forms';
 
 type Props = {
   // gets the email so the next screen knows where the code was sent
@@ -17,15 +18,29 @@ export default function RegisterScreen({ onRegistered, onLogin }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
+    // the phone keyboard adds a space after an autocompleted email
+    const cleanEmail = email.trim();
+    const cleanName = displayName.trim();
+
+    const formError = checkRegisterForm({
+      email: cleanEmail,
+      displayName: cleanName,
+      password,
+    });
+    if (formError) {
+      setError(formError);
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
       await register({
-        email,
+        email: cleanEmail,
         password,
-        display_name: displayName,
+        display_name: cleanName,
       });
-      onRegistered(email);
+      onRegistered(cleanEmail);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
