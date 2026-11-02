@@ -1,15 +1,21 @@
-import { IsEmail, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  Matches,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class PasswordResetConfirmPayloadDTO {
-  @IsUUID()
-  @IsNotEmpty()
-  token: string;
-
-  @IsNotEmpty()
   @IsEmail()
   email: string;
 
-  @IsNotEmpty()
   @IsString()
+  @Matches(/^\d{6}$/)
+  token: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
   new_password: string;
 }

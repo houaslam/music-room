@@ -26,6 +26,7 @@ import { DeviceHeadersDto } from './dto/headers-validation.dto.js';
 import { RefreshFamilies } from './entities/refresh-families.entity.js';
 import { RefreshTokenService } from './refresh-tokens.service.js';
 import { GoogleAccounts } from './entities/google-accounts.entity.js';
+import { error } from 'node:console';
 
 @Injectable()
 export class AuthService {
@@ -317,7 +318,6 @@ export class AuthService {
     await this.entityManager.transaction(async (manager) => {
       await this.lockAllRefreshSession(manager, userId);
 
-      // only the live ones, a family already logged out keeps its revoked_at
       await manager.update(
         RefreshFamilies,
         { user_id: userId, revoked_at: IsNull() },
@@ -363,6 +363,59 @@ export class AuthService {
       },
       order: { id: 'ASC' },
       lock: { mode: 'pessimistic_write' },
+    });
+  }
+
+  async changePassword(
+    email: string,
+    new_password: string,
+    old_passowrd: string,
+  ) {
+    return await this.entityManager.transaction(async (manager) => {
+      const existingUser = await manager.findOne(Users, {
+        where: { email },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !existingUser ||
+        !existingUser.email_verified_at ||
+        !existingUser.password_hash
+      )
+        throw new ConflictException({
+          error: {
+            code: 'INVALID_CREDENTIALS',
+            message: getMessage('auth', 'INVALID_CREDENTIALS'),
+          },
+        });
+
+      this.userService.assertAccountNotLocked(existingUser);
+
+      if (
+        !(await this.passwordHasher.verify(
+          old_passowrd,
+          existingUser.password_hash,
+        ))
+      )
+        throw new ConflictException({
+          error: {
+            code: 'INVALID_CREDENTIALS',
+            message: getMessage('auth', 'INVALID_CREDENTIALS'),
+          },
+        });
+
+      await manager.update(Users, existingUser.id, {
+        password_hash: await this.passwordHasher.hash(new_password),
+      });
+
+      await this.lockAllRefreshSession(manager, existingUser.id);
+
+      await manager.update(
+        RefreshFamilies,
+        { user_id: existingUser.id, revoked_at: IsNull() },
+        {
+          revoked_at: new Date(),
+        },
+      );
     });
   }
 }

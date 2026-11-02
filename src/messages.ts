@@ -27,6 +27,13 @@ export const MESSAGES = {
     INTERNAL_ERROR: 'Email could not be sent. Please try again later.',
     SMTP_DELIVERY_FAILED: 'SMTP delivery failed',
   },
+  passwordReset: {
+    TOKEN_INVALID: 'Invalid or already used recovery token',
+    TOKEN_EXPIRED: 'Recovery token has expired',
+    TOKEN_ATTEMPTS_EXCEEDED: 'Recovery token attempt limit reached',
+    SUBJECT: 'Reset your password',
+    BODY: 'Your password recovery OTP is',
+  },
   emailVerification: {
     TOKEN_INVALID: 'Invalid token',
     TOKEN_EXPIRED: 'Token has expired',

@@ -89,32 +89,44 @@
         - no access token required; invalid, expired, unknown, or already-revoked refresh tokens are no-ops
         - existing access tokens remain usable until expiry
 
-- auth/password-reset
-    - Status: unfinished controller stub (currently returns empty 204); behavior below is planned
+- ✅ auth/password-reset/request
     - Method: POST
+    - Authentication: no access token required; standard client headers required
     - Request Body:
-        - email (string)
+        - email (required, valid email string)
     - Response Body: (empty)
     - Status Codes:
-        - 202: always (account exists or not, limit reached or not)
-        - 429: per IP only, never per email (would leak that the account exists)
-
-- auth/password-reset/confirm
-    - Status: unfinished controller stub; behavior below is planned
-    - Method: POST
-    - Request Body:
-        - token (uuid string)
-        - email (string)
-        - new_password (string)
-    - Response Body: (empty)
-    - Status Codes:
-        - 204: OK
-        - 400: TOKEN_INVALID (unknown or used)
-        - 400: TOKEN_EXPIRED
+        - 202: same response for eligible, unknown or ineligible accounts, suppressed resend, and delivery/storage failures
+        - 400: VALIDATION_ERROR -- invalid request fields
+        - 429: RATE_LIMITED -- per-IP request limit exceeded
     - Notes:
-        - consume token, save new hash, revoke ALL refresh tokens of the user
-        - set email_verified_at if null (clicking the link proves the email)
+        - eligible accounts have a verified email and an existing password; Google-only accounts are skipped
+        - emails a random six-digit OTP, like email verification; stores only its password-hasher hash
+        - OTP lifetime uses `OTP_LIFETIME_MS`, the same setting as email verification
+        - suppresses resend while a sent token is active; replacement tokens invalidate earlier recovery tokens
+        - does not disclose the token or account state in the response
 
+- ✅ auth/password-reset/confirm
+    - Method: POST
+    - Authentication: recovery token in the body; no access token required
+    - Request Body:
+        - email (required, valid email string)
+        - token (required string, exactly six digits from the recovery email)
+        - new_password (required string, 8–128 characters)
+    - Response Body: (empty)
+    - Status Codes:
+        - 204: password recovered and live refresh sessions revoked
+        - 400: VALIDATION_ERROR -- invalid request fields
+        - 400: TOKEN_INVALID -- unknown, already consumed, wrong-purpose token or ineligible account
+        - 400: TOKEN_EXPIRED -- recovery token has expired
+        - 400: TOKEN_ATTEMPTS_EXCEEDED -- `MAX_TOKEN_ATTEMPTS` reached
+    - Notes:
+        - locks the user by email and looks up the latest recovery token once; validates expiry, single-use state and `MAX_TOKEN_ATTEMPTS`
+        - consumes all outstanding recovery tokens, updates the password hash, clears login failures/locks and revokes all live refresh families in one transaction
+        - failed writes roll back the entire recovery; tokens can only be successfully consumed once
+        - existing access tokens remain usable until expiry; sign in again for new refresh credentials
+        - incorrect OTP guesses count toward the attempt limit even when rejected
+        - email verification tokens cannot be used for password recovery
 - ✅ auth/email-verification
     - resend verification mail
     - Method: POST
@@ -254,7 +266,8 @@
 |---|---|---|
 | login | 100 / 15 min | 5 fails / 15 min -> locked 15 min |
 | register | 30 / hour | - |
-| password-reset | 30 / hour | not implemented |
+| password-reset/request | 30 / hour | suppresses resend while a sent recovery token remains active |
+| password-reset/confirm | 30 / hour | single-use recovery token |
 | email-verification | 30 / hour | skips resend while the latest sent OTP remains active |
 | refresh | 120 / min | - |
 | logout, logout-all, me, delete | 30 / hour | - |

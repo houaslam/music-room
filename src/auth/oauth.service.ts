@@ -43,18 +43,67 @@ export class OAuthService {
       });
     }
 
-    return this.entityManager.transaction(async (manager) => {
-      const existingGoogleAccount = await manager.findOne(GoogleAccounts, {
+    const email = user.email.trim().toLowerCase();
+    try {
+      return await this.entityManager.transaction(async (manager) => {
+        const existingGoogleAccount = await manager.findOne(GoogleAccounts, {
+          where: { google_user_id: user.id },
+          relations: { users_id: true },
+        });
+
+        if (existingGoogleAccount) {
+          return { id: existingGoogleAccount.users_id.id, is_new_user: false };
+        }
+
+        const existingUser = await manager.findOne(Users, { where: { email } });
+        if (existingUser) {
+          throw new ConflictException({
+            error: {
+              code: 'LINK_REQUIRED',
+              message: getMessage('auth', 'LINK_REQUIRED'),
+            },
+          });
+        }
+
+        const createdUser = await manager.save(Users, {
+          email,
+          display_name: user.name,
+          password_hash: null,
+          email_verified_at: new Date(),
+        });
+
+        await manager.save(GoogleAccounts, {
+          users_id: { id: createdUser.id },
+          google_user_id: user.id,
+        });
+
+        await manager.save(Profiles, {
+          user_id: createdUser.id,
+          display_name: createdUser.display_name,
+          avatar_url: user.photo,
+        });
+
+        return { id: createdUser.id, is_new_user: true };
+      });
+    } catch (error) {
+      if (
+        !(error instanceof QueryFailedError) ||
+        error.driverError?.code !== '23505'
+      ) {
+        throw error;
+      }
+
+      const identity = await this.entityManager.findOne(GoogleAccounts, {
         where: { google_user_id: user.id },
         relations: { users_id: true },
       });
-
-      if (existingGoogleAccount) {
-        return { id: existingGoogleAccount.users_id.id, is_new_user: false };
+      if (identity) {
+        return { id: identity.users_id.id, is_new_user: false };
       }
 
-      const email = user.email.trim().toLowerCase();
-      const existingUser = await manager.findOne(Users, { where: { email } });
+      const existingUser = await this.entityManager.findOne(Users, {
+        where: { email },
+      });
       if (existingUser) {
         throw new ConflictException({
           error: {
@@ -63,27 +112,8 @@ export class OAuthService {
           },
         });
       }
-
-      const createdUser = await manager.save(Users, {
-        email,
-        display_name: user.name,
-        password_hash: null,
-        email_verified_at: new Date(),
-      });
-
-      await manager.save(GoogleAccounts, {
-        users_id: { id: createdUser.id },
-        google_user_id: user.id,
-      });
-
-      await manager.save(Profiles, {
-        user_id: createdUser.id,
-        display_name: createdUser.display_name,
-        avatar_url: user.photo,
-      });
-
-      return { id: createdUser.id, is_new_user: true };
-    });
+      throw error;
+    }
   }
 
   async link(appUserId: string, googleUser: GooglePrincipal): Promise<void> {
@@ -209,21 +239,21 @@ export class OAuthService {
       });
       if (!user)
         throw new UnauthorizedException({
-      error: {
-        code: 'INVALID_CREDENTIALS',
-        message: getMessage('auth', 'INVALID_CREDENTIALS'),
-      },
-    });
-    const linkedAcc = await manager.findOne(GoogleAccounts, {
-      where: { users_id: { id: appUserId } },
-    });
-    if (!linkedAcc)
-      throw new NotFoundException({
-        error: {
-          code: 'NOT_LINKED',
-          message: getMessage('auth', 'NOT_LINKED'),
-        },
+          error: {
+            code: 'INVALID_CREDENTIALS',
+            message: getMessage('auth', 'INVALID_CREDENTIALS'),
+          },
+        });
+      const linkedAcc = await manager.findOne(GoogleAccounts, {
+        where: { users_id: { id: appUserId } },
       });
+      if (!linkedAcc)
+        throw new NotFoundException({
+          error: {
+            code: 'NOT_LINKED',
+            message: getMessage('auth', 'NOT_LINKED'),
+          },
+        });
       if (!user.password_hash)
         throw new ConflictException({
           error: {
