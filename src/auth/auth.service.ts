@@ -6,7 +6,6 @@ import {
   Injectable,
   InternalServerErrorException,
   UnauthorizedException,
-  UnprocessableEntityException,
 } from '@nestjs/common';
 import { UserService } from '../user/user.service.js';
 import { PasswordHasher } from '@nestjs/authentication';
@@ -364,62 +363,6 @@ export class AuthService {
       },
       order: { id: 'ASC' },
       lock: { mode: 'pessimistic_write' },
-    });
-  }
-
-  async oauth(req: { user: any }) {
-    const user = req.user;
-    if (!user || typeof user.id !== 'string' || !user.id.trim() || user.email_verified !== true)
-      throw new UnauthorizedException({
-        error: {
-          code: 'OAUTH_INVALID',
-          message: getMessage('auth', 'OAUTH_INVALID'),
-        },
-      });
-
-    if (typeof user.email !== 'string' || !user.email.trim()) {
-      throw new UnprocessableEntityException({
-        error: { code: 'OAUTH_EMAIL_MISSING', message: getMessage('auth', 'OAUTH_EMAIL_MISSING') },
-      });
-    }
-
-    return this.entityManager.transaction(async (manager) => {
-      const existingGoogleAccount = await manager.findOne(GoogleAccounts, {
-        where: { google_user_id: user.id },
-        relations: {users_id: true}
-      });
-
-      if (existingGoogleAccount) {
-        return { id: existingGoogleAccount.users_id.id, is_new_user: false };
-      }
-
-      const email = user.email.trim().toLowerCase();
-      const existingUser = await manager.findOne(Users, { where: { email } });
-      if (existingUser) {
-        throw new ConflictException({
-          error: { code: 'LINK_REQUIRED', message: getMessage('auth', 'LINK_REQUIRED') },
-        });
-      }
-
-      const createdUser = await manager.save(Users, {
-        email,
-        display_name: user.name,
-        password_hash: null,
-        email_verified_at: new Date(),
-      });
-
-      await manager.save(GoogleAccounts, {
-        users_id: { id: createdUser.id },
-        google_user_id: user.id,
-      });
-
-      await manager.save(Profiles, {
-        user_id: createdUser.id,
-        display_name: createdUser.display_name,
-        avatar_url: user.photo,
-      });
-
-      return { id: createdUser.id, is_new_user: true };
     });
   }
 }

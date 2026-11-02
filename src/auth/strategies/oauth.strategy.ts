@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, type Profile } from 'passport-google-oauth20';
 import { getMessage } from '../../messages.js';
+import { OAuthStateStore } from '../session/oauth-state.store.js';
 
 export interface GooglePrincipal {
   id: string;
@@ -27,6 +28,7 @@ export class OauthStrategy extends PassportStrategy(Strategy, 'google') {
       callbackURL: configService.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
       scope: ['email', 'profile'],
       state: true,
+      store: new OAuthStateStore(),
     });
   }
 

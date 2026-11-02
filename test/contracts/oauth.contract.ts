@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { FindOperator } from 'typeorm';
 import { AuthService } from '../../src/auth/auth.service.js';
+import { OAuthService } from '../../src/auth/oauth.service.js';
 import { OAuthController } from '../../src/auth/oauth.controller.js';
 import { GoogleAuthGuard } from '../../src/auth/guards/google.guard.js';
 import { RateLimitGuard } from '../../src/auth/guards/throttle.guard.js';
@@ -85,7 +86,10 @@ function setup() {
       const row = rows(entity).find((row) => matches(row, options.where));
       if (!row) return null;
       if (entity === GoogleAccounts && options.relations?.users_id) {
-        return { ...row, users_id: rows(Users).find(user => user.id === row.users_id.id) };
+        return {
+          ...row,
+          users_id: rows(Users).find((user) => user.id === row.users_id.id),
+        };
       }
       return row;
     }),
@@ -158,13 +162,18 @@ function setup() {
     hasher as never,
     {} as never,
   );
+  const oauthService = new OAuthService(em as never);
   const signIn = async (user: any = principal(), extra: Row = {}) => {
     const req = { user, device, ...extra };
-    const account = await service.oauth(req);
-    return { ...await service.login(account, device), is_new_user: account.is_new_user };
+    const account = await oauthService.oauth(req);
+    return {
+      ...(await service.login(account, device)),
+      is_new_user: account.is_new_user,
+    };
   };
   return {
     service,
+    oauthService,
     signIn,
     rows,
     tables,
@@ -193,7 +202,7 @@ describe('Day 3 OAuth account and session acceptance', () => {
     async (user) => {
       // Explicit undefined must not trigger signIn's default argument.
       await rejects(
-        h.service.oauth({ user }) as Promise<any>,
+        h.oauthService.oauth({ user }) as Promise<any>,
         401,
         'OAUTH_INVALID',
       );
@@ -203,11 +212,7 @@ describe('Day 3 OAuth account and session acceptance', () => {
   );
 
   it('rejects a missing Google subject before creating any account', async () => {
-    await rejects(
-      h.signIn({ ...principal(), id: '' }),
-      401,
-      'OAUTH_INVALID',
-    );
+    await rejects(h.signIn({ ...principal(), id: '' }), 401, 'OAUTH_INVALID');
     expect(h.rows(Users)).toHaveLength(0);
   });
 
@@ -398,10 +403,17 @@ describe('Day 3 Google callback HTTP contract', () => {
     is_new_user: false,
   };
   beforeAll(async () => {
-    Reflect.defineMetadata('design:paramtypes', [AuthService], OAuthController);
+    Reflect.defineMetadata(
+      'design:paramtypes',
+      [AuthService, OAuthService],
+      OAuthController,
+    );
     const module = await Test.createTestingModule({
       controllers: [OAuthController],
-      providers: [{ provide: AuthService, useValue: auth }],
+      providers: [
+        { provide: AuthService, useValue: auth },
+        { provide: OAuthService, useValue: auth },
+      ],
     })
       .overrideGuard(RateLimitGuard)
       .useValue({ canActivate: () => true })
@@ -423,7 +435,9 @@ describe('Day 3 Google callback HTTP contract', () => {
   });
   beforeEach(() => {
     denied = false;
-    auth.oauth.mockReset().mockResolvedValue({ id: 'local-user', is_new_user: false });
+    auth.oauth
+      .mockReset()
+      .mockResolvedValue({ id: 'local-user', is_new_user: false });
     auth.login.mockReset().mockResolvedValue(response);
   });
   afterAll(async () => {

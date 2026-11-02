@@ -4,7 +4,7 @@
 
 - base path: `/api/v1`
 - ✅ = implemented; 🟡 = implemented but live verification is pending; unmarked routes are planned or unfinished.
-- OAuth supports Google only. The browser callback currently has a reported `STATE_MISSING_OR_EXPIRED` failure; live sign-in remains pending verification.
+- OAuth supports Google only. Login and linking use browser sessions with intent bound to each OAuth state; complete each attempt in the same browser session.
 - headers required on non-OAuth auth requests (400 `MISSING_CLIENT_HEADERS` if missing):
     - `X-Platform` (android / ios)
     - `X-Device-Model`
@@ -142,7 +142,7 @@
         - expired/used tokens are rejected before reserving an attempt; OTP comparison follows the conditional attempt update
         - successful confirmation consumes the token and verifies the email
 
-- 🟡 auth/oauth/google
+- ✅ auth/oauth/google
     - Method: GET
     - Request Body: none
     - Response Body: none; redirects the browser to Google
@@ -153,7 +153,7 @@
         - creates a ten-minute OAuth state session using the `music-room.oauth` cookie
         - retain the cookie and use the same host throughout the flow
 
-- 🟡 auth/oauth/google/callback
+- ✅ auth/oauth/google/callback
     - Method: GET
     - Request Body: none
     - Query Parameters (supplied by Google):
@@ -161,6 +161,8 @@
         - state (string) -- must match the initiating browser session; consumed once
         - error (string, on denial/failure instead of code)
     - Response Body:
+        - for linking: `{ "message": "Google account linked successfully" }`; no login tokens are issued
+        - for normal Google login:
         - access_token (string)
         - refresh_token (string)
         - expires_in (int)
@@ -169,6 +171,8 @@
         - 200: OK
         - 401: OAUTH_INVALID
         - 409: LINK_REQUIRED -- email already belongs to an account without this Google identity; authenticated linking is required
+        - 409: PROVIDER_IDENTITY_IN_USE -- linking identity belongs to another app user
+        - 409: PROVIDER_ALREADY_LINKED -- app user already has a Google identity
         - 422: OAUTH_EMAIL_MISSING -- Google profile has no email address
     - Notes:
         - GOOGLE_REDIRECT_URI and Google Console's authorized redirect URI must match this callback URL exactly
@@ -179,7 +183,7 @@
         - account creation commits before the controller creates a refresh family and issues application JWTs
         - browser OAuth sessions have a null device ID
         - state sessions currently use memory storage; a restart clears pending attempts
-        - automated OAuth tests pass; live browser state/cookie verification remains pending
+        - OAuth account, callback and browser-state contract tests pass; same-browser authentication was verified during development
 
 ---
 
@@ -199,19 +203,18 @@
     - Notes:
         - settings screen uses it for link/unlink buttons
 
-- auth/oauth/google/link
-    - Status: planned; no controller implementation yet
+- ✅ auth/oauth/google/link
     - Method: POST
-    - Request Body:
-        - token (string)
-    - Response Body: (empty)
+    - Authentication: app access token in `Authorization: Bearer <access_token>`
+    - Request Body: none
+    - Response Body: none; redirects the browser to Google
     - Status Codes:
-        - 204: OK
-        - 401: OAUTH_INVALID
-        - 409: PROVIDER_IDENTITY_IN_USE -- this Google account is linked to another user
-        - 409: PROVIDER_ALREADY_LINKED -- this user already has this provider
+        - 302: redirect to Google sign-in/consent
+        - 401: INVALID_CREDENTIALS -- missing, invalid or expired app access token
     - Notes:
         - emails don't have to match, user is already logged in
+        - saves the authenticated app user ID with this attempt's OAuth state
+        - finish in the same browser session at `auth/oauth/google/callback`; linking success and conflicts are returned there
 
 - auth/oauth/google
     - Status: planned; no controller implementation yet
