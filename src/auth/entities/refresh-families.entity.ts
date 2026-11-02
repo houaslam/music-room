@@ -21,8 +21,8 @@ export class RefreshFamilies {
   @JoinColumn({ name: 'user_id' })
   user: Users;
 
-  @Column('uuid')
-  device_id: string;
+  @Column('uuid', {nullable: true})
+  device_id: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   revoked_at: Date | null;

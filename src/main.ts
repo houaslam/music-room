@@ -1,5 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { ConfigService } from '@nestjs/config';
+import { createOAuthSession } from './auth/oauth-session.js';
 import {
   BadRequestException,
   ValidationPipe,
@@ -8,6 +10,7 @@ import {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use('/api/v1/auth/oauth', createOAuthSession(app.get(ConfigService)));
   app.enableShutdownHooks();
   app.enableVersioning({
     type: VersioningType.URI,

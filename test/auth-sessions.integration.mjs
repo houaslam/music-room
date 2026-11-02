@@ -104,8 +104,6 @@ try {
   });
   const refreshTokens = new RefreshTokenService(hasher, {}, jwt, config);
   const service = new AuthService(
-    jwt,
-    config,
     {},
     refreshTokens,
     source.manager,

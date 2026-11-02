@@ -73,8 +73,6 @@ describe('AuthService session families', () => {
       config,
     );
     service = new AuthService(
-      jwt,
-      config,
       {} as never,
       refreshTokenService,
       entityManager as never,

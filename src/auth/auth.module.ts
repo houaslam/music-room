@@ -17,6 +17,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { RefreshTokens } from './entities/refresh-tokens.entity.js';
 import { RefreshTokenService } from './refresh-tokens.service.js';
 import { Users } from '../user/entities/user.entity.js';
+import { OauthStrategy } from './strategies/oauth.strategy.js';
+import { OAuthController } from './oauth.controller.js';
+import { GoogleAccounts } from './entities/google-accounts.entity.js';
 
 @Module({
   imports: [
@@ -28,10 +31,16 @@ import { Users } from '../user/entities/user.entity.js';
     ConfigModule.forFeature(jwtConfig),
     ConfigModule.forFeature(refreshJwtConfig),
     ProfileModule,
-    TypeOrmModule.forFeature([RefreshTokens]),
-    TypeOrmModule.forFeature([Users])
+    TypeOrmModule.forFeature([RefreshTokens, Users, GoogleAccounts]),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JWTStrategy, RateLimitGuard, RefreshTokenService],
+  controllers: [AuthController, OAuthController],
+  providers: [
+    AuthService,
+    LocalStrategy,
+    JWTStrategy,
+    RateLimitGuard,
+    RefreshTokenService,
+    OauthStrategy,
+  ],
 })
 export class AuthModule {}
