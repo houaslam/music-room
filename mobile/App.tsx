@@ -30,7 +30,7 @@ export default function App() {
   return (
     <View style={styles.container}>
       {screen.name === 'loading' ? (
-        <ActivityIndicator style={styles.loading} />
+        <ActivityIndicator color="#BD4626" style={styles.loading} />
       ) : screen.name === 'register' ? (
         <RegisterScreen
           onRegistered={(email) => setScreen({ name: 'verify', email })}
@@ -51,7 +51,7 @@ export default function App() {
       ) : (
         <AccountScreen onLoggedOut={() => setScreen({ name: 'login' })} />
       )}
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
     </View>
   );
 }
@@ -59,7 +59,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F7F3EA',
   },
   loading: {
     flex: 1,

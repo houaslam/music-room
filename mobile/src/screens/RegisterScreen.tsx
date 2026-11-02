@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
+import {
+  Screen,
+  Heading,
+  Field,
+  Action,
+  Notice,
+  SwitchAction,
+  ui,
+} from '../ui/Design';
 import { register } from '../api/auth';
 import { ApiError } from '../api/client';
 
@@ -34,43 +43,50 @@ export default function RegisterScreen({ onRegistered, onLogin }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create your account</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
+    <Screen>
+      <Heading title="Create an account" subtitle="Sign up for Music Room." />
+      <View style={ui.form}>
+        <Field
+          label="Email address"
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+        />
+        <Field
+          label="Display name"
+          placeholder="Display name"
+          value={displayName}
+          onChangeText={setDisplayName}
+          autoComplete="nickname"
+        />
+        <Field
+          label="Password"
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          autoCapitalize="none"
+          autoComplete="new-password"
+          secureTextEntry
+        />
+        <Text style={ui.helper}>Use at least 8 characters.</Text>
+        {error ? <Notice>{error}</Notice> : null}
+        <Action
+          title={loading ? 'Creating account...' : 'Create account'}
+          onPress={handleSubmit}
+          disabled={loading}
+          loading={loading}
+        />
+      </View>
+      <SwitchAction
+        prompt="Already have an account?"
+        title="Log in"
+        accessibilityLabel="I already have an account"
+        onPress={onLogin}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Display name"
-        value={displayName}
-        onChangeText={setDisplayName}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        autoCapitalize="none"
-        autoComplete="new-password"
-        secureTextEntry
-      />
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <Button
-        title={loading ? 'Creating account...' : 'Create account'}
-        onPress={handleSubmit}
-        disabled={loading}
-      />
-      <Button title="I already have an account" onPress={onLogin} />
-    </View>
+    </Screen>
   );
 }
 
@@ -82,27 +98,3 @@ function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   return 'Something went wrong, try again.';
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    paddingTop: 96,
-    gap: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  error: {
-    color: '#d32f2f',
-  },
-});

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, StyleSheet, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
+import { Screen, Heading, Action, Notice, ui } from '../ui/Design';
 import { deleteAccount, logoutAll, me, type Me } from '../api/auth';
 import { ApiError } from '../api/client';
 import { clearSession, logOut, withAccessToken } from '../session';
@@ -85,59 +86,63 @@ export default function AccountScreen({ onLoggedOut }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Your account</Text>
-
-      {account ? (
-        <Text style={styles.email}>{account.email}</Text>
-      ) : error ? null : (
-        <Text style={styles.label}>Loading...</Text>
-      )}
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {error && !account ? (
-        <Button title="Try again" onPress={loadAccount} />
-      ) : null}
-
-      <Button
-        title={busy === 'logout' ? 'Logging out...' : 'Log out'}
-        onPress={handleLogout}
-        disabled={busy !== null}
+    <Screen>
+      <Heading
+        title="Your account"
+        subtitle="Manage your Music Room account and sessions."
       />
-      <Button
-        title={busy === 'logout-all' ? 'Logging out...' : 'Log out everywhere'}
-        onPress={handleLogoutAll}
-        disabled={busy !== null}
-      />
-      <Button
-        title={busy === 'delete' ? 'Deleting...' : 'Delete account'}
-        color="#d32f2f"
-        onPress={confirmDelete}
-        disabled={busy !== null}
-      />
-    </View>
+      <View style={ui.card}>
+        <View style={ui.avatar}>
+          <Text style={ui.avatarText}>
+            {account ? account.email.charAt(0).toUpperCase() : '♪'}
+          </Text>
+        </View>
+        <Text style={ui.section}>YOUR ACCOUNT</Text>
+        {account ? (
+          <>
+            <Text style={ui.email}>{account.email}</Text>
+            <Text style={ui.badge}>
+              {account.email_verified
+                ? '✓  EMAIL VERIFIED'
+                : '○  EMAIL NOT VERIFIED'}
+            </Text>
+          </>
+        ) : error ? null : (
+          <Text style={ui.helper}>Loading...</Text>
+        )}
+      </View>
+      <View style={ui.form}>
+        {error ? <Notice>{error}</Notice> : null}
+        {error && !account ? (
+          <Action title="Try again" onPress={loadAccount} />
+        ) : null}
+        <Text style={ui.section}>SESSION & SECURITY</Text>
+        <Action
+          title={busy === 'logout' ? 'Logging out...' : 'Log out'}
+          onPress={handleLogout}
+          disabled={busy !== null}
+          loading={busy === 'logout'}
+        />
+        <Action
+          title={
+            busy === 'logout-all' ? 'Logging out...' : 'Log out everywhere'
+          }
+          onPress={handleLogoutAll}
+          disabled={busy !== null}
+          loading={busy === 'logout-all'}
+          secondary
+        />
+        <Text style={ui.helper}>
+          Logging out everywhere ends your sessions on all devices.
+        </Text>
+        <Action
+          title={busy === 'delete' ? 'Deleting...' : 'Delete account'}
+          onPress={confirmDelete}
+          disabled={busy !== null}
+          loading={busy === 'delete'}
+          destructive
+        />
+      </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    paddingTop: 96,
-    gap: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  label: {
-    color: '#666',
-  },
-  email: {
-    marginBottom: 12,
-  },
-  error: {
-    color: '#d32f2f',
-  },
-});

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Screen, Heading, Field, Action, Notice, ui } from '../ui/Design';
 import { confirmEmail, resendCode } from '../api/auth';
 import { ApiError } from '../api/client';
 
@@ -40,30 +41,35 @@ export default function VerifyEmailScreen({ email, onVerified }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Check your email</Text>
-      <Text>We sent a 6 digit code to {email}</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Code"
-        value={code}
-        onChangeText={setCode}
-        keyboardType="number-pad"
-        autoComplete="one-time-code"
-        maxLength={6}
+    <Screen artwork>
+      <Heading
+        title="Verify your email"
+        subtitle={`We sent a 6 digit code to ${email}`}
       />
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {info ? <Text>{info}</Text> : null}
-
-      <Button
-        title={loading ? 'Checking...' : 'Verify'}
-        onPress={handleVerify}
-        disabled={loading}
-      />
-      <Button title="Send a new code" onPress={handleResend} />
-    </View>
+      <View style={ui.form}>
+        <Field
+          label="Your verification code"
+          placeholder="Code"
+          value={code}
+          onChangeText={setCode}
+          keyboardType="number-pad"
+          autoComplete="one-time-code"
+          textContentType="oneTimeCode"
+          maxLength={6}
+          style={{ fontSize: 25, letterSpacing: 9, textAlign: 'center' }}
+        />
+        <Text style={ui.helper}>Enter the code to verify your email.</Text>
+        {error ? <Notice>{error}</Notice> : null}
+        {info ? <Notice success>{info}</Notice> : null}
+        <Action
+          title={loading ? 'Checking...' : 'Verify'}
+          onPress={handleVerify}
+          disabled={loading}
+          loading={loading}
+        />
+        <Action title="Send a new code" onPress={handleResend} secondary />
+      </View>
+    </Screen>
   );
 }
 
@@ -79,27 +85,3 @@ function errorMessage(err: unknown): string {
   }
   return 'Something went wrong, try again.';
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    paddingTop: 96,
-    gap: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  error: {
-    color: '#d32f2f',
-  },
-});

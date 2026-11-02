@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
+import {
+  Screen,
+  Heading,
+  Field,
+  Action,
+  Notice,
+  SwitchAction,
+  ui,
+} from '../ui/Design';
 import { login } from '../api/auth';
 import { ApiError } from '../api/client';
 import { startSession } from '../session';
@@ -42,37 +51,42 @@ export default function LoginScreen({
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome back</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
+    <Screen artwork>
+      <Heading title="Log in" subtitle="Log in to your Music Room account." />
+      <View style={ui.form}>
+        <Field
+          label="Email address"
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+        />
+        <Field
+          label="Password"
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          autoCapitalize="none"
+          autoComplete="current-password"
+          secureTextEntry
+        />
+        {error ? <Notice>{error}</Notice> : null}
+        <Action
+          title={loading ? 'Logging in...' : 'Log in'}
+          onPress={handleSubmit}
+          disabled={loading}
+          loading={loading}
+        />
+      </View>
+      <SwitchAction
+        prompt="New to Music Room?"
+        title="Create an account"
+        accessibilityLabel="Create an account"
+        onPress={onRegister}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        autoCapitalize="none"
-        autoComplete="current-password"
-        secureTextEntry
-      />
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <Button
-        title={loading ? 'Logging in...' : 'Log in'}
-        onPress={handleSubmit}
-        disabled={loading}
-      />
-      <Button title="Create an account" onPress={onRegister} />
-    </View>
+    </Screen>
   );
 }
 
@@ -86,27 +100,3 @@ function errorMessage(err: unknown): string {
   }
   return 'Something went wrong, try again.';
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    paddingTop: 96,
-    gap: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  error: {
-    color: '#d32f2f',
-  },
-});
