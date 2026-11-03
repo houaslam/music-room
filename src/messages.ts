@@ -23,6 +23,11 @@ export const MESSAGES = {
   user: {
     EMAIL_TAKEN: 'Email is already taken!',
   },
+  profile: {
+    PROFILE_NOT_FOUND: 'Profile not found',
+    VALIDATION_ERROR: 'Request validation failed',
+    INVALID_CREDENTIALS: 'Invalid credentials!',
+  },
   email: {
     INTERNAL_ERROR: 'Email could not be sent. Please try again later.',
     SMTP_DELIVERY_FAILED: 'SMTP delivery failed',
