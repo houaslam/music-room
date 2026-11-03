@@ -14,6 +14,7 @@ import { Profiles } from './profile/entities/profiles.entity.js';
 import { RefreshTokens } from './auth/entities/refresh-tokens.entity.js';
 import { RefreshFamilies } from './auth/entities/refresh-families.entity.js';
 import { GoogleAccounts } from './auth/entities/google-accounts.entity.js';
+import { MusicPreferences } from './profile/entities/music-preferences.entity.js';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { GoogleAccounts } from './auth/entities/google-accounts.entity.js';
           Profiles,
           RefreshTokens,
           RefreshFamilies,
-          GoogleAccounts
+          GoogleAccounts,
+          MusicPreferences
         ],
         synchronize: true,
       }),
