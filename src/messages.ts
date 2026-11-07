@@ -23,6 +23,25 @@ export const MESSAGES = {
   user: {
     EMAIL_TAKEN: 'Email is already taken!',
   },
+  profile: {
+    PROFILE_NOT_FOUND: 'Profile not found',
+    VALIDATION_ERROR: 'Request validation failed',
+    INVALID_CREDENTIALS: 'Invalid credentials!',
+  },
+  friends: {
+    VALIDATION_ERROR: 'Request validation failed',
+    MISSING_CLIENT_HEADERS: 'Required client headers are missing or invalid',
+    INVALID_CREDENTIALS: 'Invalid credentials!',
+    RATE_LIMITED: 'Too many requests, please try again later',
+    INTERNAL_ERROR: 'Internal error, please try again later!',
+    SELF_FRIENDSHIP: 'You cannot create a friendship with yourself',
+    USER_NOT_FOUND: 'User not found',
+    INCOMING_REQUEST_EXISTS: 'This user already sent you a friend request',
+    ALREADY_FRIENDS: 'You are already friends with this user',
+    FRIEND_REQUEST_FORBIDDEN: 'You cannot accept your own friend request',
+    FRIEND_REQUEST_NOT_FOUND: 'Friend request not found',
+    FRIEND_REQUEST_NOT_PENDING: 'This friendship is already accepted',
+  },
   email: {
     INTERNAL_ERROR: 'Email could not be sent. Please try again later.',
     SMTP_DELIVERY_FAILED: 'SMTP delivery failed',

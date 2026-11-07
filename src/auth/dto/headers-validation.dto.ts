@@ -5,7 +5,9 @@ import { Expose } from 'class-transformer';
 export class DeviceHeadersDto {
   @Expose({ name: 'x-platform' })
   @IsNotEmpty()
-  @IsIn(['ios', 'android'], { message: 'X-Platform must be either android or ios' })
+  @IsIn(['ios', 'android', 'web'], {
+    message: 'X-Platform must be android, ios or web',
+  })
   platform: string;
 
   @Expose({ name: 'x-device-model' })
@@ -14,7 +16,9 @@ export class DeviceHeadersDto {
 
   @Expose({ name: 'x-app-version' })
   @IsNotEmpty()
-  @Matches(/^\d+\.\d+\.\d+$/, { message: 'X-App-Version must follow semantic versioning (e.g., 1.0.4)' })
+  @Matches(/^\d+\.\d+\.\d+$/, {
+    message: 'X-App-Version must follow semantic versioning (e.g., 1.0.4)',
+  })
   appVersion: string;
 
   @Expose({ name: 'x-device-id' })
