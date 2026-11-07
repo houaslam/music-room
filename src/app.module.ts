@@ -15,6 +15,9 @@ import { RefreshTokens } from './auth/entities/refresh-tokens.entity.js';
 import { RefreshFamilies } from './auth/entities/refresh-families.entity.js';
 import { GoogleAccounts } from './auth/entities/google-accounts.entity.js';
 import { MusicPreferences } from './profile/entities/music-preferences.entity.js';
+import { FriendsService } from './friends/friends.service.js';
+import { FriendsModule } from './friends/friends.module.js';
+import { Friendships } from './friends/entities/friends.entity.js';
 
 @Module({
   imports: [
@@ -35,7 +38,8 @@ import { MusicPreferences } from './profile/entities/music-preferences.entity.js
           RefreshTokens,
           RefreshFamilies,
           GoogleAccounts,
-          MusicPreferences
+          MusicPreferences,
+          Friendships
         ],
         synchronize: true,
       }),
@@ -53,6 +57,7 @@ import { MusicPreferences } from './profile/entities/music-preferences.entity.js
     UserModule,
     ProfileModule,
     EmailModule,
+    FriendsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,12 +1,9 @@
 import {
-  IsBoolean,
-  IsDate,
+  IsArray,
   IsDateString,
   IsDefined,
-  IsEmail,
   IsEnum,
   IsNotEmpty,
-  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -19,6 +16,17 @@ import {
 import { Transform, Type } from 'class-transformer';
 import { ProfileItemsVisibility } from '../entities/profiles.enum.js';
 
+export class UpdateProfileMusicPrefDTO {
+  @IsOptional()
+  @IsArray()
+  @IsString({each:true})
+  genres: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({each:true})
+  favorite_artists: string[];
+}
 export class UpdateProfileChangesDTO {
   @ValidateIf((_, value) => value !== undefined)
   @IsString()
@@ -59,6 +67,13 @@ export class UpdateProfileChangesDTO {
   @ValidateIf((_, value) => value !== undefined)
   @IsEnum(ProfileItemsVisibility)
   prefs_visibility?: ProfileItemsVisibility;
+
+  @IsDefined()
+  @IsObject()
+  @ValidateNested()
+  @IsOptional()
+  @Type(() => UpdateProfileMusicPrefDTO)
+  music_preferences:UpdateProfileMusicPrefDTO
 }
 
 export class UpdateUserDTO {

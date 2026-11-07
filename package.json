@@ -21,6 +21,7 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:auth-contract": "vitest run --config ./vitest.config.auth-contract.ts",
+    "test:friends-db": "npm run build && node test/friends.integration.mjs",
     "test:auth-db": "npm run build && node test/auth-sessions.integration.mjs"
   },
   "dependencies": {

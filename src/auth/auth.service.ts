@@ -129,6 +129,7 @@ export class AuthService {
   }
 
   async login(user: { id: string }, headers: DeviceHeadersDto | null) {
+    console.log("LOOOOGIN")
     const tokens = await this.refreshTokenService.generateTokens(user.id);
     let deviceId: any = null;
     if (headers) deviceId = headers.deviceId;

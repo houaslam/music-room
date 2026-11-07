@@ -10,6 +10,21 @@ import {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  if (process.env.NODE_ENV !== 'production') {
+    app.enableCors({
+      origin:
+        /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):(8081|8082|8083|19006)$/,
+      methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Platform',
+        'X-Device-Model',
+        'X-App-Version',
+        'X-Device-Id',
+      ],
+    });
+  }
   app.use('/api/v1/auth/oauth', createOAuthSession(app.get(ConfigService)));
   app.enableShutdownHooks();
   app.enableVersioning({
@@ -18,7 +33,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted:true,
+      forbidNonWhitelisted: true,
       transform: true,
       exceptionFactory: (errors) => {
         return new BadRequestException({
